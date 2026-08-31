@@ -1,0 +1,26 @@
+==============================================================================
+ROGII wellbore geology prediction -- local held-out benchmark
+==============================================================================
+started        : 2026-08-31 12:47:27
+machine        : ??  |  NVIDIA GeForce RTX 3050 6GB Laptop GPU  |  torch 2.6.0+cu124
+device         : cuda
+
+split          : GroupKFold by well over the 773 labelled train wells.
+                 fold 0 of 5 held out as the local test set.
+                 618 wells train / 155 wells held out.
+                 The shipped test/ folder has 3 unlabelled wells that
+                 duplicate training wells, so it cannot be scored; it is
+                 used only to check the submission path.
+
+epochs         : 100
+variants       : base
+metric         : pooled RMSE in feet over every scored row of the
+                 held-out wells (the competition metric), plus the
+                 well-mean RMSE, which weights every well equally.
+==============================================================================
+--- reference baselines (no model) -------------------------------------------
+
+  constant TVT (predict no change)   pooled RMSE   18.783 ft
+  flat layers (anchor - dZ)          pooled RMSE  109.261 ft
+  dip projected from the prefix      pooled RMSE   41.923 ft
+

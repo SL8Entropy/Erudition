@@ -1,0 +1,219 @@
+
+Skip to
+content
+5th Place Solution
+
+Synthetic-Data-Centric CNN
+
+ROGII - Wellbore Geology Prediction
+
+Solution Writeup · 5th place · Aug 7, 2026
+
+First of all, thanks to ROGII and Kaggle — this was a genuinely fun competition.
+Special thanks to @hengck23 for generously sharing so many insights in the discussions — the base channel layout of my input images started from the representation he shared.
+
+TL;DR: CNNs on TVT×MD images, pretrained for ~25 epochs on synthetic wells and fine-tuned for about 2 epochs on real wells; an ensemble of models with different backbones. To make my CV trustworthy, I focused above all on raising the fidelity of the synthetic data.
+
+--
+1. How I ended up centering everything on synthetic data
+1.1. Particle filters
+
+I started on July 4th and tried many approaches. Early on, my main line of work was characterizing the distribution of (horizontal GR − type well GR) and iterating on the likelihood function of a particle filter (PF). Adding PF variations kept improving the score. I had also started building synthetic data, and the CNN's accuracy was improving too. I tried combining PF with the synthetic data, but generating synthetic wells on the fly while computing multiple PF variants was too heavy, and I eventually dropped the PF entirely.
+1.2. Synthetic data
+
+The public notebooks showed a large gap between CV and public score. By training primarily on synthetic data, I aimed to make my CV trustworthy. I spent most of my time improving the fidelity of the synthetic data.
+2. Building the synthetic data
+2.1. Synthetic GR, version 1
+
+The horizontal-well GR log is generated in this order:
+
+    generate the type well GR
+    generate the geological layers
+    generate the drilling path
+    generate the horizontal-well GR (type well GR plus noise)
+    Neither the type well GR nor the horizontal GR copies fragments of real waveforms — everything is generated to be statistically similar. The horizontal-well GR is composed of three parts:
+
+hwGR(md) = tw(tvt(md)) + δ(tvt(md), md) + ε(md)
+
+    tw(tvt(md)): the type well GR value at the current TVT
+    δ(tvt(md), md) (lateral heterogeneity): a Gaussian process over the TVT axis × (along MD: a static component + a slowly-swapping component with a long-correlation OU process)
+    ε(md) (measurement noise): white noise + a short-wavelength OU + a long-wavelength OU
+    The measurement noise reflects the fact that measurement errors are serially correlated; it is a function of MD. The lateral-heterogeneity term expresses how the residual pattern differs between wells: when a single well revisits the same TVT, a similar residual reappears, but the similarity fades as you move away along MD — δ captures that behavior.
+
+2.2. Synthetic GR, version 2 (latent geology)
+
+Looking at type well GR next to horizontal-well GR, you notice that the type well is smoothed along the TVT axis: GR variation from beds thinner than a certain thickness has been erased. Because of this, composing the horizontal GR as "type well plus noise" can never close the gap to real data.
+
+So I switched to generating both the type well GR and the horizontal GR from a latent geology. The procedure becomes:
+
+    generate the latent geological GR
+    generate the type well GR
+    generate the geological layers
+    generate the drilling path
+    generate the horizontal-well GR
+    Both logs are now derived from the latent column:
+
+tw(tvt)  = H_tw[L](tvt)
+hwGR(md) = H_hw[L](tvt(md), md) + δ(tvt(md), md) + ε(md)
+L = L_lo + L_hi     : latent GR split into low/high frequency bands
+
+The latent geological GR is generated on a 0.25 ft grid. The type well GR is produced by smoothing the latent column and then sampling it at 0.5 ft, 1 ft, etc.
+3. Input
+
+Each horizontal well becomes a 256 × 768 (+48) image (rows = TVT bins, columns = 12 ft of MD each). The channels are:
+# 	channel 	content
+0 	type well GR 	each TVT row's type-well GR value, replicated across all columns (vertical stripes)
+1 	hwGR 	each MD column's horizontal-well GR (12 ft column mean), replicated down all rows (horizontal stripes)
+2 	GR coverage 	each column's fraction of valid GR samples (lower where data is missing), replicated down rows
+3 	known path 	the confirmed pre-PS path drawn as a Gaussian line through its (TVT row, MD column) cells; blank after PS
+4 	row coordinate 	each row's TVT relative to the anchor (PS-point TVT), replicated across columns (vertical gradient)
+5 	cumulative −ΔZ 	cumulative Z change from the PS point to each column (where the path would sit under a flat-layer assumption)
+6 	dip 	the trajectory's tangent slope per column (from dz/dmd, clipped)
+7 	azimuth sin 	sine of the horizontal heading per column
+8 	azimuth cos 	cosine component
+9 	type well − hwGR misfit 	ch0 − ch1
+10 	context type well GR 	reference type well of the ±800 ft neighborhood (each row's value replicated across columns)
+11 	context coverage 	mask of rows where ch10's reference is valid
+12 	median hw GR 	each column's GR aggregated by median instead of mean
+13 	type well − median-hwGR misfit 	ch0 − ch12
+
+A 256 × 48 image is concatenated on the right. It draws the type well GR and the pre-PS horizontal GR on TVT × GR axes.
+4. Model: a CNN on the TVT × MD canvas
+
+input 14ch × 256 rows × 768 cols (+48 appendix cols)
+ ↓
+① encoder:
+  maxvit_tiny / effnetv2_rw_s / hrnet_w18
+ ↓
+② decoder: UNet-style
+ ↓
+③ heads
+  head1: SDF = tanh × 3
+  head2: row-classification logits
+
+As an auxiliary loss, the model must paint the trajectory that the horizontal-well GR would trace if the true TVT path were followed — produced from the 256 × 48 image.
+
+When you plot the horizontal-well GR on the TVT × GR chart using the correct path versus a wrong predicted path, the failure is sometimes visually obvious. I wanted the model to learn exactly that. This auxiliary loss improved the score by about 0.1 ft.
+
+5. Training
+
+Pretraining on synthetic data runs for 25 epochs. Fine-tuning on real data ran for 8 epochs, but the best epoch was almost always epoch 2. Augmentation on real data was just two things:
+
+    shifting the PS position
+    horizontal flip
+
+6. Inference
+
+    Type well correction: for wells sharing the same type well, I build a median residual profile from the sibling horizontal wells and add it to the type well. The type well GR serves as the expected GR value at each TVT; because of the type well's limited observation quality, there are places where it clearly disagrees with the horizontal GR. The other wells' horizontal GR values are used to update that expectation. I confirmed that most of the test data shares its type wells with the training data.
+    Inference on a larger canvas:
+
+    First predict every well on the standard canvas: 256 rows (0.5 ft/row, covering anchor ±64 ft).
+    Edge detection: take each well's maximum |relative TVT| of the predicted path, and flag the well if it exceeds 55 ft.
+    Re-infer flagged wells on a 384-row canvas (±96 ft) and replace their predictions entirely.
+
+7. Validation strategy
+
+The public LB is only ~50-60 wells and behaved like pure noise. My last six scored submissions, with CV, public and private:
+Sub 	CV 	Public 	Private
+v5 	4.940 	5.585 (my public best) 	5.993 (my private worst)
+v6 (+ neighbor-well channel) 	4.882 	5.631 	5.936
+v8 (+ flat-drilling-well correction) 	4.87 	5.593 	5.940
+v9 	4.870 	5.729 (my public worst) 	5.887
+v10 	4.891 	5.618 	5.907
+v11 (backbone swapped to MaxViT-base) 	4.844 	5.600 	5.835
+
+Public and private are almost anti-correlated, while CV and private rank-correlate very well. My plan was to submit v11 — a 0.1 CV improvement over v5 on OOF — and select it as one of my final two. But it crashed with an error about 30 minutes before the deadline. I managed to resubmit 5 minutes before the deadline, and scoring completed 10 minutes after it. The score would have been 3rd place on private.
+The cause: the img_size argument passed to timm at model construction is unnecessary for MaxViT-tiny but required for MaxViT-base.
+8. What didn't work
+
+    training with different seeds
+    finer MD resolution
+
+9. Distribution shift between train and test
+
+A model trained only on synthetic data (no fine-tuning) scores 6.342 on private (≈15th place). Fine-tuning on real data improves OOF and public score by about 1.5 ft, but improves private by only about 0.5 ft. The training data and the public test data appear to be very similar, while the private test data seems to have a slightly different distribution. The type wells should be shared with the training data for most of the test set — perhaps the drillers or the GR tools differ. It looks like the competition ultimately tested robustness to this kind of small distribution shift.
+model 	CV 	public 	private
+synthetic pretraining only (no FT) 	6.250 	7.186 	6.342
+with FT 	OOF 4.844 	5.600 	5.835
+10. Bonus: a blind test
+
+The eight images below are a mix of real and synthetic data. Codex and Gemini could not tell which is which. Neither can I.
+
+
+
+
+
+
+
+Author
+daimaru
+
+daimaruk
+Citation
+
+daimaru. 5th Place Solution. https://www.kaggle.com/competitions/rogii-wellbore-geology-prediction/writeups/5th-place-solution. 2026. Kaggle
+3 Comments
+ 
+
+This comment will be made public once posted.
+tennogh
+
+Posted 17 days ago
+
+· 62nd in this Competition
+
+Congrats, really cool work on the synthetics!
+Igor Kuvaev
+Competition Host
+
+Posted 17 days ago
+
+@daimaruk thank you for the participation and the writeup, very well written!
+daimaru
+Topic Author
+
+Posted 17 days ago
+
+· 5th in this Competition
+
+@igorakuvaev
+Thank you for the kind words, and for hosting such an interesting competition!
+
+If you don't mind sharing, I'd love to hear your thoughts on a guess I made in the writeup. I'm very curious what kind of distribution difference could produce the pattern I observed:
+
+    A model pretrained only on synthetic wells scored 6.34 on private.
+    Fine-tuning on the real training wells improved OOF and public score by ~1.5 ft, but private by only ~0.5 ft.
+
+This made me suspect that the training data and the public test wells are very similar, while the private test wells differ slightly. Since most test wells seem to share their type wells with the training set, I guessed the difference might be something like different drillers or different GR tools rather than different geology.
+
+Is that guess anywhere close? Even a qualitative hint (e.g., whether the public/private split was random or structured by area/operator/time) would be really interesting — no problem at all if it can't be shared.
+Igor Kuvaev
+Competition Host
+
+Posted 15 days ago
+
+@daimaruk The initial dataset was split randomly into training public and private subsets, right @ryanholbrook ?
+Definitely there is nothing special about any of these datasets - all of these wells were drilled in a different years by different people, but the selection into each category is random.
+daimaru
+Topic Author
+
+Posted 15 days ago
+
+· 5th in this Competition
+
+@igorakuvaev
+Thank you for the answer!
+
+    Looking at AI_wellbore_geology_prediction_task_en.pptx, the test wells are skewed to the northeast.
+    My public LB scores were worse than my CV, but when I restricted the evaluation to the northeastern part of the training data, the score came out close to the public LB.
+
+The map in AI_wellbore_geology_prediction_task_en shows about 50 test wells, so I understood it as showing the locations of the public set.
+
+So my guess is: the locations differ slightly, and along with that, the geometry of the geological layers may have differed, and the tools and the people who drilled the wells may have differed as well — could that be the case?
+Igor Kuvaev
+Competition Host
+
+Posted 15 days ago
+
+Honestly, this is a very local area of a large oil field, so I strongly doubt that they used different tools for a part of this area.
+The dataset is based on the public data, so I am not completely sure about it, as I haven’t drilled these wells.
