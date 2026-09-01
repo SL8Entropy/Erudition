@@ -1,0 +1,65 @@
+==============================================================================
+ROGII wellbore geology prediction -- local held-out benchmark
+==============================================================================
+started        : 2026-08-31 18:40:55
+machine        : ??  |  NVIDIA GeForce RTX 3050 6GB Laptop GPU  |  torch 2.6.0+cu124
+device         : cuda
+
+split          : GroupKFold by well over the 773 labelled train wells.
+                 fold 0 of 5 held out as the local test set.
+                 618 wells train / 155 wells held out.
+                 The shipped test/ folder has 3 unlabelled wells that
+                 duplicate training wells, so it cannot be scored; it is
+                 used only to check the submission path.
+
+epochs         : 30
+variants       : v4_refgr
+metric         : pooled RMSE in feet over every scored row of the
+                 held-out wells (the competition metric), plus the
+                 well-mean RMSE, which weights every well equally.
+==============================================================================
+--- reference baselines (no model) -------------------------------------------
+
+  constant TVT (predict no change)   pooled RMSE   18.783 ft
+  flat layers (anchor - dZ)          pooled RMSE  109.261 ft
+  dip projected from the prefix      pooled RMSE   41.923 ft
+
+--- v4_refgr --------------------------------------------------------------
+  3rd place's largest private-LB lever plus 5th place's typewell correction: match against sibling laterals sharing the typewell (0.25 ft bins) and against the well's own pre-PS prefix, and correct the typewell itself with the sibling median residual. Adds 7 channels.
+
+  channels           : 31   canvas 400x352   params 53.8M
+  heads              : dz=False move=False sigma=False
+  decode             : phases=1 reanchor=0.0 adaptive=False dp_weight=0.0
+  train time         : 42m 53s  (30 epochs)
+  inference time     : 29s for 155 wells (0.19 s/well)
+
+  pooled RMSE        : 14.2861 ft
+  well-mean RMSE     : 10.8568 ft
+  rows scored        : 763,749
+  worst 5 wells hold : 36.6% of the squared error
+  worst wells        : 86454a6f (52.6 ft), 1b1eba53 (54.0 ft), 7e721392 (36.2 ft), 91db7070 (43.2 ft), 56b00794 (30.8 ft)
+  checkpoint         : runs\v4_refgr\split0_seed0_fold0.pt
+==============================================================================
+SUMMARY (held-out pooled RMSE, lower is better)
+==============================================================================
+
+  variant         pooled  well-mean      train     infer    vs base
+  ----------------------------------------------------------------
+  v4_refgr       14.2861    10.8568    42m 53s       29s           
+
+  best: v4_refgr at 14.2861 ft
+
+  Caveat: this is ONE fold at a reduced epoch count. Run-to-run
+  spread on a 5-fold mean was 0.10-0.19 RMSE for 4th place, which
+  is larger than most differences you will see here. Use
+  `run.py compare` for the leave-largest-contribution-out test
+  before believing any ordering.
+
+--- submission path ----------------------------------------------------------
+
+  wrote runs\submission_base.csv in 27s
+  test/ wells: ['000d7d20', '00bbac68', '00e12e8b']
+  of those, held out from training: ['000d7d20']
+  (the shipped test wells duplicate training wells and carry no
+   TVT column, so no error metric is computed for them)
+

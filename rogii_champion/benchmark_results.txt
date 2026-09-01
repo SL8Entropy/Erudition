@@ -1,0 +1,71 @@
+==============================================================================
+ROGII wellbore geology prediction -- local held-out benchmark
+==============================================================================
+started        : 2026-08-31 15:34:22
+machine        : ??  |  NVIDIA GeForce RTX 3050 6GB Laptop GPU  |  torch 2.6.0+cu124
+device         : cuda
+
+split          : GroupKFold by well over the 773 labelled train wells.
+                 fold 0 of 5 held out as the local test set.
+                 618 wells train / 155 wells held out.
+                 The shipped test/ folder has 3 unlabelled wells that
+                 duplicate training wells, so it cannot be scored; it is
+                 used only to check the submission path.
+
+epochs         : 30
+variants       : base, v1_tta, v2_slope, v3_moves, v4_refgr, v5_gate
+metric         : pooled RMSE in feet over every scored row of the
+                 held-out wells (the competition metric), plus the
+                 well-mean RMSE, which weights every well equally.
+==============================================================================
+--- reference baselines (no model) -------------------------------------------
+
+  constant TVT (predict no change)   pooled RMSE   18.783 ft
+  flat layers (anchor - dZ)          pooled RMSE  109.261 ft
+  dip projected from the prefix      pooled RMSE   41.923 ft
+
+--- base ------------------------------------------------------------------
+  1st place reproduction: 2D alignment on a 400x352 canvas, ConvNeXt-Small U-Net with BatchNorm, smoothed cross-entropy plus expected-path Huber and a GR penalty, PF and XY-neighbour channels, Z-shift and GR-affine augmentation.
+
+  channels           : 24   canvas 400x352   params 53.8M
+  heads              : dz=False move=False sigma=False
+  decode             : phases=1 reanchor=0.0 adaptive=False dp_weight=0.0
+  train time         : 45m 39s  (30 epochs)
+  inference time     : 35s for 155 wells (0.23 s/well)
+
+  pooled RMSE        : 13.5222 ft
+  well-mean RMSE     : 10.5325 ft
+  rows scored        : 763,749
+  worst 5 wells hold : 29.0% of the squared error
+  worst wells        : 86454a6f (43.9 ft), 7e721392 (35.9 ft), 1b1eba53 (37.2 ft), 91db7070 (39.1 ft), 8f201368 (26.8 ft)
+  checkpoint         : runs\base\split0_seed0_fold0.pt
+--- v1_tta ----------------------------------------------------------------
+  Inference-side only. MD-phase TTA over 8 sub-column offsets (2nd), quarter-point re-anchoring (4th), adaptive taller canvas for wells that leave the TVT window (5th), and a sibling-corrected typewell (5th). Same weights as base, so any change is purely the decode.
+
+  channels           : 24   canvas 400x352   params 53.8M
+  heads              : dz=False move=False sigma=False
+  decode             : phases=8 reanchor=0.25 adaptive=True dp_weight=0.0
+  train time         : none (reuses base)
+  inference time     : 6m 17s for 155 wells (2.43 s/well)
+
+  pooled RMSE        : 13.1106 ft
+  well-mean RMSE     : 10.0885 ft
+  rows scored        : 763,749
+  worst 5 wells hold : 33.1% of the squared error
+  worst wells        : 86454a6f (49.7 ft), 91db7070 (40.5 ft), 1b1eba53 (37.2 ft), 7e721392 (31.4 ft), 8f201368 (26.5 ft)
+  checkpoint         : runs\base\split0_seed0_fold0.pt
+--- v2_slope --------------------------------------------------------------
+  2nd place's key insight. dTVT = dz_layer - dz is an identity and dz is known at test time, so an auxiliary head predicts the smooth structural slope dz_layer/dMD and the path is integrated against the real trajectory. The coefficient on dz never has to be learned. Paired with z_layer-space slope-scaling augmentation.
+
+  channels           : 24   canvas 400x352   params 53.9M
+  heads              : dz=True move=False sigma=False
+  decode             : phases=1 reanchor=0.0 adaptive=False dp_weight=0.0
+  train time         : 42m 46s  (30 epochs)
+  inference time     : 26s for 155 wells (0.17 s/well)
+
+  pooled RMSE        : 18.1883 ft
+  well-mean RMSE     : 14.0389 ft
+  rows scored        : 763,749
+  worst 5 wells hold : 31.1% of the squared error
+  worst wells        : 86454a6f (69.0 ft), 7e721392 (45.4 ft), 8f201368 (41.1 ft), 56b00794 (39.6 ft), 1b1eba53 (40.5 ft)
+  checkpoint         : runs\v2_slope\split0_seed0_fold0.pt

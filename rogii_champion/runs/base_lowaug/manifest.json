@@ -1,0 +1,13 @@
+{
+  "variant": "base_lowaug",
+  "in_chans": 24,
+  "n_rows": 400,
+  "row_ft": 0.5,
+  "md_stride": 32.0,
+  "n_vis_cols": 32,
+  "n_tgt_cols": 320,
+  "backbone": "convnext_small.in12k_ft_in1k_384",
+  "head_dz": false,
+  "head_move": false,
+  "head_sigma": false
+}

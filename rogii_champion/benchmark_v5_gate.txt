@@ -1,0 +1,65 @@
+==============================================================================
+ROGII wellbore geology prediction -- local held-out benchmark
+==============================================================================
+started        : 2026-08-31 20:40:23
+machine        : ??  |  NVIDIA GeForce RTX 3050 6GB Laptop GPU  |  torch 2.6.0+cu124
+device         : cuda
+
+split          : GroupKFold by well over the 773 labelled train wells.
+                 fold 0 of 5 held out as the local test set.
+                 618 wells train / 155 wells held out.
+                 The shipped test/ folder has 3 unlabelled wells that
+                 duplicate training wells, so it cannot be scored; it is
+                 used only to check the submission path.
+
+epochs         : 30
+variants       : v5_gate
+metric         : pooled RMSE in feet over every scored row of the
+                 held-out wells (the competition metric), plus the
+                 well-mean RMSE, which weights every well equally.
+==============================================================================
+--- reference baselines (no model) -------------------------------------------
+
+  constant TVT (predict no change)   pooled RMSE   18.783 ft
+  flat layers (anchor - dZ)          pooled RMSE  109.261 ft
+  dip projected from the prefix      pooled RMSE   41.923 ft
+
+--- v5_gate ---------------------------------------------------------------
+  3rd place's uncertainty + gating. A Gaussian-NLL head reports a per-row sigma, and a small sequence gate mixes the candidates (map path, PF, XY plane, flat-layer prior) with softmax weights that vary along the well. Convex mixing is a hard constraint that beat an unconstrained refiner by 0.12 for 3rd place. Trained over 3 GroupKFold split patterns rather than 1.
+
+  channels           : 24   canvas 400x352   params 53.9M
+  heads              : dz=False move=False sigma=True
+  decode             : phases=1 reanchor=0.0 adaptive=False dp_weight=0.0
+  train time         : 43m 18s  (30 epochs)
+  inference time     : 26s for 155 wells (0.17 s/well)
+
+  pooled RMSE        : 13.6370 ft
+  well-mean RMSE     : 10.4438 ft
+  rows scored        : 763,749
+  worst 5 wells hold : 31.4% of the squared error
+  worst wells        : 86454a6f (52.0 ft), 7e721392 (35.6 ft), 91db7070 (36.9 ft), f88ddb26 (32.0 ft), f6824bb0 (30.3 ft)
+  checkpoint         : runs\v5_gate\split0_seed0_fold0.pt
+==============================================================================
+SUMMARY (held-out pooled RMSE, lower is better)
+==============================================================================
+
+  variant         pooled  well-mean      train     infer    vs base
+  ----------------------------------------------------------------
+  v5_gate        13.6370    10.4438    43m 18s       26s           
+
+  best: v5_gate at 13.6370 ft
+
+  Caveat: this is ONE fold at a reduced epoch count. Run-to-run
+  spread on a 5-fold mean was 0.10-0.19 RMSE for 4th place, which
+  is larger than most differences you will see here. Use
+  `run.py compare` for the leave-largest-contribution-out test
+  before believing any ordering.
+
+--- submission path ----------------------------------------------------------
+
+  wrote runs\submission_base.csv in 26s
+  test/ wells: ['000d7d20', '00bbac68', '00e12e8b']
+  of those, held out from training: ['000d7d20']
+  (the shipped test wells duplicate training wells and carry no
+   TVT column, so no error metric is computed for them)
+

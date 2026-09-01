@@ -141,8 +141,8 @@ V2 = BASE.clone(
            "the real trajectory. The coefficient on dz never has to be learned. "
            "Paired with z_layer-space slope-scaling augmentation."),
     head_dz=True,
-    w_dz=0.35,
-    w_dz_integ=1.0,
+    w_dz=0.06,          # measured: at 0.35 the dz term ran 5x the CE term,
+    w_dz_integ=0.25,    # so the model optimised the aux head instead
 )
 V2.aug.p_struct_scale = 0.55
 
@@ -191,6 +191,24 @@ V5 = BASE.clone(
                 "model on its own."),
 )
 
+# -- diagnostic -- is the augmentation load the reason the score plateaus?
+LOWAUG = BASE.clone(
+    name="base_lowaug",
+    notes=("Diagnostic, not an idea from anyone. Identical to base except the "
+           "augmentation load: a quarter as many synthetic wells and roughly "
+           "half the per-sample augmentation probability. base sees ~75% "
+           "synthetic-or-augmented samples, which suits a 100+ epoch schedule; "
+           "this asks whether that is what is holding a 30-epoch run back."),
+    synth_per_epoch=0.25,
+)
+LOWAUG.aug.p_synth = 0.15
+for _k in ("p_gr_affine", "p_reverse", "p_md_stretch", "p_level_shift",
+           "p_level_flip", "p_struct_scale", "p_gr_noise_shift", "p_gr_specaug",
+           "p_tail_crop", "p_tw_mask", "p_tw_jitter", "p_hw_noise",
+           "p_prefix_resample", "p_channel_mask", "p_pf_corrupt"):
+    setattr(LOWAUG.aug, _k, getattr(LOWAUG.aug, _k) * 0.5)
+
+
 # A tiny configuration for smoke tests and CPU boxes.
 SMOKE = BASE.clone(
     name="smoke",
@@ -200,7 +218,7 @@ SMOKE = BASE.clone(
     n_folds=2, use_pf=False, use_xy=True, num_workers=0, synth_per_epoch=0.5,
 )
 
-REGISTRY = {c.name: c for c in (BASE, V1, V2, V3, V4, V5, SMOKE)}
+REGISTRY = {c.name: c for c in (BASE, V1, V2, V3, V4, V5, LOWAUG, SMOKE)}
 
 
 def get_config(name: str) -> Config:

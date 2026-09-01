@@ -65,8 +65,8 @@
 *.whl
 
 # Large directories (if added)
-data/
-datasets/
-models/
-checkpoints/
-pretrained/
+#data/
+#datasets/
+#models/
+#checkpoints/
+#pretrained/
