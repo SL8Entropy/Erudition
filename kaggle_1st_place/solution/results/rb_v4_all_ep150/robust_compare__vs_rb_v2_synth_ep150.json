@@ -1,0 +1,24 @@
+{
+  "base": "results\\rb_v2_synth_ep150\\holdout_predictions.pqt",
+  "treat": "results\\rb_v4_all_ep150\\holdout_predictions.pqt",
+  "pred_col": "TVT_pred",
+  "wells": 155,
+  "rows": 754122,
+  "base_pooled_rmse": 5.124972225854899,
+  "treat_pooled_rmse": 5.109237163873953,
+  "delta_pooled_rmse": -0.015735061980945986,
+  "wells_improved": 91,
+  "wells_improved_share": 0.5870967741935483,
+  "k_star": 4,
+  "min_k": 10,
+  "verdict": "REJECT",
+  "top_contributors": [],
+  "bootstrap": {
+    "draws": 2000,
+    "mean": -0.016558217649742923,
+    "p05": -0.19295335599652055,
+    "p50": -0.021913871784261296,
+    "p95": 0.18252333852461303,
+    "share_improving": 0.5735
+  }
+}

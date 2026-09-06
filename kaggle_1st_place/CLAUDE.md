@@ -112,7 +112,56 @@ script forces `cfg.f = 0` rather than inheriting `archived_f`, because `0803_V2`
 archived value is 1 and would otherwise clobber a finished run. Use `--output-dir` to
 keep variants side by side.
 
-## Which runs are starved, and the 150-epoch tier
+## The 150-epoch round
+
+Same protocol, `--epochs 150`, 1 model each. `rb_v3_tta` / `rb_v4_all` are the two
+trained models rescored with `--tta 8`; they cost 5 min each, not a training run.
+
+| run | pooled RMSE | vs base@150 | best_epoch | k\* | bootstrap improving | verdict |
+|---|---:|---:|---:|---:|---:|---|
+| `0801_V2_ep150` | 4.9785 | -- | 110/150 | -- | -- | -- |
+| `rb_v3_tta_ep150` | **4.9374** | -0.041 | -- | 1 | 65% | REJECT |
+| `rb_v4_all_ep150` | 5.1092 | +0.131 | -- | 0 | 26% | REJECT |
+| `rb_v2_synth_ep150` | 5.1250 | +0.147 | 115/150 | 0 | 19% | REJECT |
+
+**Settled by this round:**
+
+- *The epoch confound was real.* Baseline 5.1618 -> 4.9785 (-0.183);
+  `rb_v2_synth` 5.5241 -> 5.1250 (-0.399). The gap closed from +0.362 to +0.147,
+  i.e. 60% of it was undertraining, exactly as predicted.
+- *The baseline is near its ceiling; `rb_v2_synth` is not.* Over epochs 50->150
+  the baseline improved -0.201 and oscillates in a 5.02-5.76 band (std 0.161);
+  `rb_v2_synth` improved -0.684 and was still descending at 150.
+- *`rb_v2_synth`'s failure mode inverted.* At 60 epochs it was worse everywhere
+  (4.370 vs 4.182 even after dropping the 8 worst wells). At 150 its removal
+  curve goes **negative from k=10 through k~105** -- it is better than the
+  baseline on the bulk of the holdout, and loses only on a few catastrophic
+  wells. Median well 2.796 vs the baseline's 2.929.
+
+**Not settled, and the reason is the holdout, not the ideas.** The remaining
++0.147 is smaller than the baseline's own checkpoint-to-checkpoint scatter
+(0.161), and `best_epoch=110` is the luckiest point on a noisy plateau while
+`rb_v2_synth`'s 115 sits on a monotone descent -- the comparison is biased toward
+the baseline by roughly the size of the gap. The wells that decide it change
+identity every run: at 150 the baseline blows up on `d1457cc5` (11.66) which
+`rb_v2_synth` fixes (4.76), while `rb_v2_synth` destroys `f0188a48` (0.83 ->
+8.67), a well the baseline nearly nails. **The pooled metric on 155 wells is
+decided by about ten coin flips**, so no single-seed run can resolve a 0.1 ft
+effect. Add seeds or folds, not epochs.
+
+**MD-phase TTA is now 4/4 positive** across two budgets and two models:
+-0.050 (base@60), -0.041 (base@150), -0.153 (synth@60), -0.016 (synth@150).
+The magnitude shrinks as a model converges, which is what you would expect if it
+averages out column-grid aliasing that a better-trained model is already less
+sensitive to. Every one of the four still fails the k\* >= 10 bar; four
+consistent signs plus Bilzard's independent -0.21 on 773 wells is the whole case
+for it, and it is free.
+
+Best result so far: **4.9374 ft** (`rb_v3_tta_ep150`), against 5.1618 at the
+start of this work. Archived `0801_V2` OOF is 4.8045 on a different protocol
+(15 models x 300 epochs x geographic CV over all 773 wells).
+
+## Which runs are starved (the 60-epoch diagnosis that led to the 150 tier)
 
 `early_stopping_rounds=50` never fires in these runs because it is gated on
 `epoch >= min_epochs` and `min_epochs=170` exceeds any budget used so far. So
@@ -190,6 +239,30 @@ several baselines into its own directory without clobbering earlier reports.
    effective batch (BatchNorm stats then come from 4, a small deviation).
 
 ~110-130 s/epoch at full scale with those settings, so archived `epochs=300` is 6-11 h.
+
+3. **Training is GPU-bound; do not bother tuning the data pipeline.** Measured on
+   this machine: the loader delivers a batch in **0.056 s** at the current
+   `num_workers=4, prefetch_factor=1`, while training consumes one every
+   **0.714 s** (110 s / 154 batches) -- it is idle ~92% of the time.
+   `workers=8, prefetch=4` gets it to 0.044 s, which buys nothing. Consistent
+   with that, all four 60-epoch runs took 109-117 s/epoch despite
+   `rb_v1_neighbor` carrying 50% more input channels and `rb_v2_synth` running
+   the full re-skin simulation every sample.
+   The GPU-side knobs are **already on**: `amp_dtype=bfloat16`,
+   `channels_last_2d=True`, `cudnn.benchmark=True` and TF32 (both follow from
+   `deterministic=False`). There is no free win sitting there, and running from
+   Jupyter changes nothing -- same interpreter, same GPU.
+4. **VRAM is nearly full at `--batch-size 4`**: 3.84 GiB peak allocated / 3.98
+   reserved of 6.00 GiB, for a (4, 16, 345, 400) input. Batch 6 would sit on the
+   edge with the display driver, batch 8 would OOM. `--grad-accum-steps 4`
+   already emulates the archived effective batch of 16.
+5. **Host RAM is the tight resource, not VRAM.** 16 GiB total with only ~4 GiB
+   free at rest. Windows DataLoader workers use `spawn`, so each one receives a
+   pickled copy of the whole dataset (all 618 wells plus the initialised
+   `Simulator`), which is why raising `num_workers` is not free here. Two
+   attempts to micro-benchmark GPU step time were destroyed by paging (they
+   reported ~37 s/batch against a real 0.71 s/batch and ended with 0.2 GiB free);
+   if you profile on this box, watch free RAM or the numbers are meaningless.
 
 ```bash
 cd solution && python seq_NN_holdout_eval.py --id 0801_V2 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
