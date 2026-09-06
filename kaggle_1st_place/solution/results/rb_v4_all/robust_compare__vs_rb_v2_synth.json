@@ -1,0 +1,81 @@
+{
+  "base": "results\\rb_v2_synth\\holdout_predictions.pqt",
+  "treat": "results\\rb_v4_all\\holdout_predictions.pqt",
+  "pred_col": "TVT_pred",
+  "wells": 155,
+  "rows": 754122,
+  "base_pooled_rmse": 5.524123328338572,
+  "treat_pooled_rmse": 5.371093400061861,
+  "delta_pooled_rmse": -0.1530299282767107,
+  "wells_improved": 81,
+  "wells_improved_share": 0.5225806451612903,
+  "k_star": 2,
+  "min_k": 10,
+  "verdict": "REJECT",
+  "top_contributors": [
+    {
+      "well_id": "fb03ae90",
+      "sse_gap": -764719.211315155,
+      "rows": 6431,
+      "base_well_rmse": 20.70765619639117,
+      "treat_well_rmse": 17.603852574710015
+    },
+    {
+      "well_id": "e7818f7a",
+      "sse_gap": -632734.7160158157,
+      "rows": 5371,
+      "base_well_rmse": 13.634364689752955,
+      "treat_well_rmse": 8.25167524764981
+    },
+    {
+      "well_id": "f2d4c8c9",
+      "sse_gap": 408197.3335838318,
+      "rows": 6249,
+      "base_well_rmse": 7.980543644941434,
+      "treat_well_rmse": 11.358305409092141
+    },
+    {
+      "well_id": "ee0300f7",
+      "sse_gap": 255649.04766654968,
+      "rows": 4544,
+      "base_well_rmse": 4.4957253385267295,
+      "treat_well_rmse": 8.744846497233285
+    },
+    {
+      "well_id": "e0079ed1",
+      "sse_gap": -206148.13794898987,
+      "rows": 3471,
+      "base_well_rmse": 10.245456413823067,
+      "treat_well_rmse": 6.751133798537352
+    },
+    {
+      "well_id": "fc03f21f",
+      "sse_gap": -150736.89809894562,
+      "rows": 4803,
+      "base_well_rmse": 12.095725621431141,
+      "treat_well_rmse": 10.720199289780048
+    },
+    {
+      "well_id": "f0188a48",
+      "sse_gap": 149371.1842842102,
+      "rows": 4170,
+      "base_well_rmse": 5.2779152645871745,
+      "treat_well_rmse": 7.979775524791662
+    },
+    {
+      "well_id": "f6bc699b",
+      "sse_gap": -109353.20093250275,
+      "rows": 3752,
+      "base_well_rmse": 18.905905741682574,
+      "treat_well_rmse": 18.118718566620757
+    }
+  ],
+  "bootstrap": {
+    "draws": 2000,
+    "mean": -0.14950710229531075,
+    "p05": -0.37512616626197365,
+    "p50": -0.14616718657144556,
+    "p95": 0.07553999470804719,
+    "share_improving": 0.864
+  }
+}

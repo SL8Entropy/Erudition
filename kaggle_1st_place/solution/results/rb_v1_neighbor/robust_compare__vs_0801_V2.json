@@ -1,0 +1,81 @@
+{
+  "base": "results\\0801_V2\\holdout_predictions.pqt",
+  "treat": "results\\rb_v1_neighbor\\holdout_predictions.pqt",
+  "pred_col": "TVT_pred",
+  "wells": 155,
+  "rows": 754122,
+  "base_pooled_rmse": 5.161750558204209,
+  "treat_pooled_rmse": 6.255573112885712,
+  "delta_pooled_rmse": 1.0938225546815037,
+  "wells_improved": 67,
+  "wells_improved_share": 0.432258064516129,
+  "k_star": 0,
+  "min_k": 10,
+  "verdict": "REJECT (no improvement at k=0)",
+  "top_contributors": [
+    {
+      "well_id": "fb03ae90",
+      "sse_gap": 2150159.714389801,
+      "rows": 6431,
+      "base_well_rmse": 12.814902730893738,
+      "treat_well_rmse": 22.32856272935542
+    },
+    {
+      "well_id": "f6d009f4",
+      "sse_gap": 2098692.5290756226,
+      "rows": 6715,
+      "base_well_rmse": 9.169339418862377,
+      "treat_well_rmse": 19.915189288374815
+    },
+    {
+      "well_id": "f2d4c8c9",
+      "sse_gap": 1367484.775056839,
+      "rows": 6249,
+      "base_well_rmse": 5.019021490959399,
+      "treat_well_rmse": 15.621240474052053
+    },
+    {
+      "well_id": "ee288beb",
+      "sse_gap": 736423.3147878647,
+      "rows": 4638,
+      "base_well_rmse": 7.515001915822736,
+      "treat_well_rmse": 14.671592105021425
+    },
+    {
+      "well_id": "e0079ed1",
+      "sse_gap": 665810.086066246,
+      "rows": 3471,
+      "base_well_rmse": 5.168462655124426,
+      "treat_well_rmse": 14.782889837076759
+    },
+    {
+      "well_id": "f49fdea3",
+      "sse_gap": 615468.3281126022,
+      "rows": 5391,
+      "base_well_rmse": 6.017424805194695,
+      "treat_well_rmse": 12.262760459673409
+    },
+    {
+      "well_id": "f5859199",
+      "sse_gap": 451752.42261505127,
+      "rows": 5790,
+      "base_well_rmse": 11.985092297384947,
+      "treat_well_rmse": 14.888428671112571
+    },
+    {
+      "well_id": "e7818f7a",
+      "sse_gap": 376584.85210704803,
+      "rows": 5371,
+      "base_well_rmse": 11.994498002518087,
+      "treat_well_rmse": 14.628139273801878
+    }
+  ],
+  "bootstrap": {
+    "draws": 2000,
+    "mean": 1.084713917064679,
+    "p05": 0.5084080002666079,
+    "p50": 1.0719436510836418,
+    "p95": 1.7195171773240534,
+    "share_improving": 0.0
+  }
+}
