@@ -431,8 +431,93 @@ python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cf
 python seq_NN_robust_compare.py --base results/0801_V2_ep150 --treat results/rb_v1_neighbor_ep300 --output-dir results/rb_v1_neighbor_ep300
 ```
 
+### Running the four architecture recipes
+
+At 60 epochs against `results/0801_V2` (5.1618), which was trained at the same
+budget from the same archived recipe. ~2 h each; `arch_v2_axial` and
+`arch_v3_raft` are somewhat slower for the added compute.
+
+```bash
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v1_unimodal --epochs 60 --output-dir results/arch_v1_unimodal --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v2_axial    --epochs 60 --output-dir results/arch_v2_axial    --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v3_raft     --epochs 60 --output-dir results/arch_v3_raft     --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v4_lkconv   --epochs 60 --output-dir results/arch_v4_lkconv   --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+```
+
+Then judge each against the 60-epoch baseline:
+
+```bash
+python seq_NN_robust_compare.py --base results/0801_V2 --treat results/arch_v1_unimodal --output-dir results/arch_v1_unimodal
+```
+
 The 60-epoch commands that produced the table above are in git history; the
 `_ep150` suffix keeps both budgets side by side rather than replacing them.
+
+## The architecture fork: `experiments/arch/`
+
+A second fork of `0801_V2`, independent of `experiments/bilzard/`, holding four
+architecture experiments. New module `seq_NN_arch_blocks.py`; the rest is
+surgical edits to `seq_NN_models.py`, `seq_NN_train.py` and `seq_NN_cfg.py`.
+
+The framing that produced these: **Ruby's pipeline is a stereo-matching network
+without the name.** `gr_abs_diff` is a cost volume over disparities (levels),
+the U-Net is cost aggregation, and softmax-expectation down the level axis is
+soft-argmin disparity regression -- GC-Net's design. That means the relevant
+literature is stereo matching, not ImageNet backbones, and it comes with a
+diagnosed failure: soft-argmin is only sound on a *unimodal* posterior; on a
+bimodal one it "blends the modes and may produce a solution far from all the
+modes". Repeating rock layers make the posterior bimodal by construction, and
+this is a candidate mechanism for the catastrophic wells that dominate pooled
+RMSE.
+
+| cfg-name | attacks | change |
+|---|---|---|
+| `arch_v1_unimodal` | mode blending | confidence head + AcfNet-style learned-width unimodal target, **replacing** the fixed-width alignment term (same weight, same role) |
+| `arch_v2_axial` | short sight along MD | MD-axial attention after ConvNeXt stages 1-3 |
+| `arch_v3_raft` | one-shot decoding | 8 rounds of RAFT-style residual refinement over the cost volume |
+| `arch_v4_lkconv` | short sight along MD | parallel long-along-MD depthwise kernel in all 36 ConvNeXt blocks |
+
+**v2 and v4 are competing fixes for the same weakness**, not complements. Run
+one, measure, then consider the other; running both at once attributes nothing.
+
+### Everything starts numerically inert
+
+Each added path is gated so a fresh model reproduces the archived behaviour
+exactly. This matters because the branches graft onto a pretrained ConvNeXt: a
+randomly initialised parallel branch would scramble the pretrained features on
+step one and the run would measure that damage, not the idea.
+
+Verified directly, not assumed:
+
+- `AnisotropicLargeKernelDW`: 36 depthwise convs wrapped; output bit-identical
+  to the unwrapped conv at init (zero weight *and* zero per-channel gate).
+- `AxialMDStack`: identity at init. The positional conv sits outside the gated
+  residual, so it needs zero-init too -- it was the one place the claim was
+  false until fixed.
+- `IterativeLevelRefiner`: 8 rounds, all identical at init, and iterate 0
+  reproduces the one-shot expectation to 2.4e-07. Adds 0.55M params to 54.1M.
+
+### Geometry the blocks rely on
+
+Feature maps are `(B, C, H=MD, W=level)`. The ConvNeXt patchify stem is skipped
+(`to_backbone` is a 1x1 conv into stage 0), so MD runs
+**345 -> 173 -> 87 -> 44 -> 22** and level runs **400 -> 100 -> 50 -> 25 -> 13**.
+Hence: axial attention on stages 1-3 (MD 87/44/22, a few MB of attention);
+large kernels tapered `(31, 31, 15, 7)` because a 31-long kernel on a 22-column
+map is an expensive global average; and full-resolution 2-D attention is out of
+the question (345x400 tokens).
+
+### Traps hit while building this
+
+- `SeqUNet2DModel.model_named_parameters()` enumerates an explicit module list.
+  A new submodule that is not added there **is silently never optimised**. The
+  confidence head and the refiner are registered in both `model_modules()` and
+  `model_named_parameters()`.
+- `make_model` passes `cfg.model_cfg` straight into the constructor, so every
+  new knob needs a matching keyword argument or the run dies at model build.
+- `arch_v3_raft` sets `regression` weight to 0 and moves it to `iters`: the
+  per-iteration loss already contains the final prediction at full weight, so
+  keeping both would double-count it.
 
 ## Known caveat
 

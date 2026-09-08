@@ -1,0 +1,1 @@
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --epochs 150 --output-dir results/0801_V2_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
