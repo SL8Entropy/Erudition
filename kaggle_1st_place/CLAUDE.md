@@ -161,6 +161,77 @@ Best result so far: **4.9374 ft** (`rb_v3_tta_ep150`), against 5.1618 at the
 start of this work. Archived `0801_V2` OOF is 4.8045 on a different protocol
 (15 models x 300 epochs x geographic CV over all 773 wells).
 
+## The architecture round (60 epochs)
+
+Against `results/0801_V2` (5.1618), same budget, same archived recipe.
+
+| run | pooled RMSE | vs base | best_epoch | s/epoch | k\* | bootstrap improving | verdict |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `arch_v4_lkconv` | 5.1314 | -0.030 | 60/60 | 170 | 21 | 64% | **ACCEPT -- but see below** |
+| `arch_v2_axial` | 5.1382 | -0.024 | 60/60 | 110 | 6 | 59% | REJECT |
+| `arch_v3_raft` | 5.2395 | +0.078 | **40**/60 | 121 | 0 | 26% | REJECT |
+| `arch_v1_unimodal` | 5.3233 | +0.162 | 60/60 | 117 | 0 | 21% | REJECT |
+
+### `arch_v4_lkconv`'s ACCEPT is spurious: the branch never trained
+
+`AnisotropicLargeKernelDW` shipped with **both** factors of `gate *
+large_conv(x)` zero-initialised. That is a gradient deadlock:
+`d(loss)/d(gate)` is proportional to `large_conv(x)` = 0, and
+`d(loss)/d(large_conv.weight)` is proportional to `gate` = 0. Neither can ever
+move.
+
+Confirmed on the trained checkpoint: **all 36 gates and all 36 weight tensors
+are still exactly 0.0** after 60 epochs. The model is functionally the plain
+baseline -- it just paid 170 s/epoch instead of 111 to convolve zeros.
+
+Fixed by leaving the weight at its normal initialisation and gating with zero
+alone, which keeps identity-at-init *and* gives the gate a live gradient
+(verified both). The run is worth repeating; the result above is not about
+large kernels at all.
+
+### The accident is the most useful result: a seed-level null
+
+Because that model is functionally identical to the baseline, the comparison is
+a **same-model / different-random-draw null** -- something this project never
+had. It gives, from pure training nondeterminism:
+
+> delta **-0.030 ft**, **k\* = 21**, bootstrap **64% improving**, ACCEPT.
+
+So a k\* of 21 against a bar of 10, and a 64% bootstrap, are reachable with
+*no model change whatsoever*. Consequences:
+
+- **The k\* >= 10 bar is far too lenient at this effect size.** The acceptance
+  test can and did hand ACCEPT to noise. `k*` measures whether a difference is
+  *spread across wells*, not whether it is *real*; a diffuse noise draw scores
+  well on it.
+- Every delta in this project smaller than about 0.05 ft should be treated as
+  unmeasured, whatever `k*` says. That includes the MD-phase TTA numbers
+  (-0.050, -0.041, -0.016), whose case now rests on sign consistency across
+  four measurements and Bilzard's independent result, not on this holdout.
+- `arch_v2_axial`'s -0.024 is *smaller than the null draw of -0.030*. It cannot
+  be distinguished from zero.
+
+### What the other three say
+
+- **`arch_v2_axial` did train, but barely.** `gamma_attn` mean 0.011 (max
+  0.026), `gamma_mlp` 0.003 -- the attention contributes a few percent of the
+  residual stream. Still descending at epoch 60 (5.184@55 -> 5.177@60), so
+  undertrained like everything else at this budget. Unproven, not disproven.
+- **`arch_v3_raft` is the only variant that peaked early**: `best_epoch=40`,
+  then the curve rose (5.282@40 -> 5.400@50 -> 5.285@60). That pattern is
+  instability in the refinement loop rather than undertraining, and it is the
+  known failure mode of iterative decoders. Its `delta_head` did learn
+  (mean |w| 5.4e-4), so it was doing something, just not something that helped.
+- **`arch_v1_unimodal` is the cheapest test of the mode-blending hypothesis, and
+  it did not pay** (+0.162). The confidence head trained normally. This is the
+  clearest evidence available against the premise that soft-argmin mode blending
+  drives the catastrophic wells -- though it replaces the alignment loss rather
+  than adding to it, so it changes the training signal substantially, and 60
+  epochs may be too short for a learned-width target to calibrate.
+
+Net: **nothing in this round beat the baseline in a way that survives scrutiny**,
+and the round's real contribution is the noise calibration above.
+
 ## Which runs are starved (the 60-epoch diagnosis that led to the 150 tier)
 
 `early_stopping_rounds=50` never fires in these runs because it is gated on

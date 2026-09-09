@@ -69,8 +69,15 @@ class AnisotropicLargeKernelDW(nn.Module):
             groups=channels,
             bias=False,
         )
-        nn.init.zeros_(self.large_conv.weight)
-        # Per-channel gate, zero at init: the branch starts switched off.
+        # Only ONE of the two factors may start at zero.  Zeroing both is a
+        # gradient deadlock: d(loss)/d(gate) is proportional to large_conv(x),
+        # which is zero, and d(loss)/d(large_conv.weight) is proportional to
+        # gate, which is also zero -- so neither ever moves and the branch is
+        # dead for the whole run.  (This bug shipped in the first version and
+        # cost a 60-epoch run: all 36 gates were still exactly 0.0 at the end.)
+        # Keeping the weight at its normal initialisation and gating with zero
+        # still makes the block identical to the pretrained conv at step one,
+        # but leaves the gate a live gradient.
         self.gate = nn.Parameter(torch.zeros(1, channels, 1, 1))
 
     def forward(self, x):
