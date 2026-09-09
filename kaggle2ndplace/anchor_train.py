@@ -51,7 +51,8 @@ import gr2tvt_data as gd                                          # noqa: E402
 from gr2tvt_model import (GR2TVTAnchorNet, anchor_loss, dzl_loss,  # noqa: E402
                           dzl_target, items_to_x)
 from anchor_data import (AugCfg, AnchorWellDataset, build_item, collate,  # noqa: E402
-                         eval_rows, load_wells, split_wells, well_names)
+                         eval_rows, grid_worker_init, load_wells, set_grid,
+                         split_wells, well_names)
 
 
 # ------------------------------------------------------------------------------ utils
@@ -136,8 +137,9 @@ def ensure_backbone_weights(args, log) -> Path | None:
 
 def build_model(args, device, log=print):
     kw = dict(backbone=args.backbone, in_chans=9, d=64, n_blocks=2,
-              stem_stride=1, fuse_div=args.fuse_div, ps_col=args.ps_col,
+              stem_stride=args.stem_stride, fuse_div=args.fuse_div, ps_col=args.ps_col,
               anchor_m=gd.H + args.ps_col, n_move=args.n_move,
+              win=args.win, row=gd.ROW,
               ps_gr=True, z_dip=True, drop_path=args.drop_path,
               pretrained=args.pretrained)
     if args.dzl_w > 0:
@@ -285,6 +287,11 @@ def train(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    grid = set_grid(row=args.row)
+    log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols "
+        f"(row {gd.ROW} ft, colw {gd.COLW} ft), state grid {gd.T // 4} bins of "
+        f"{2 * args.win / (gd.T // 4):.1f} ft, stem_stride {args.stem_stride}")
+
     names = well_names(args.data)
     if args.limit_wells:
         names = names[:args.limit_wells]
@@ -310,7 +317,8 @@ def train(args):
                            pre_ps_label=args.pre_ps_label)
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                     collate_fn=collate, drop_last=True, pin_memory=False,
-                    persistent_workers=args.num_workers > 0)
+                    persistent_workers=args.num_workers > 0,
+                    worker_init_fn=grid_worker_init(grid) if args.num_workers else None)
 
     model = build_model(args, device)
     n_par = sum(p.numel() for p in model.parameters())
@@ -475,6 +483,13 @@ def parse_args(argv=None):
     p.add_argument("--n-move", type=int, default=10)
     p.add_argument("--win", type=float, default=128.0)
     p.add_argument("--drop-path", type=float, default=0.0)
+    # resolution ablation.  Defaults reproduce the released dzl_w1 geometry exactly.
+    p.add_argument("--stem-stride", type=int, default=1, choices=[1, 2],
+                   help="1 = the released config (stage 0 at full input resolution); "
+                        "2 = the stock EfficientNet stem, ~2.1x fewer FLOPs")
+    p.add_argument("--row", type=float, default=0.5,
+                   help="vertical grid sampling in ft; also sets the output bin size "
+                        "(0.5 -> 512 rows / 2 ft bins, 1.0 -> 256 rows / 4 ft bins)")
 
     p.add_argument("--huber-w", type=float, default=1.0)
     p.add_argument("--soft-ce", action="store_true", help="interpolate the CE target between bins")

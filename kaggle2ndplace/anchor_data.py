@@ -61,6 +61,46 @@ HW_COLS = ["MD", "Z", "TVT", "GR", "TVT_input"]
 CACHE_VERSION = 1
 
 
+# ------------------------------------------------------------------------------ grid
+
+
+def set_grid(row: float | None = None, colw: float | None = None,
+             h: int | None = None) -> dict:
+    """Override the grid constants in ``gr2tvt_data`` for a resolution variant.
+
+    ``ROW``/``T``/``LEVELS`` and ``COLW``/``H`` are module-level constants in the
+    author's file, which is not edited.  Rebinding them at run time is the same
+    mechanism the author's own submission notebook uses to switch between its 32 ft and
+    16 ft families, so it is the supported way to change geometry here.
+
+    ``row`` is the vertical sampling of the input grid in feet.  Note it also sets the
+    *output* bin size: the model derives its state grid as ``tq = T // 4``, so row=0.5
+    gives 512 rows and 2 ft bins, row=1.0 gives 256 rows and 4 ft bins.  The move
+    vocabulary is +-n_move bins, so it coarsens with it.  Must be called before any
+    ``build_item``, and in every DataLoader worker (see ``grid_worker_init``).
+    """
+    if row is not None:
+        gd.ROW = float(row)
+        gd.T = int(2 * gd.WIN / gd.ROW)
+        gd.LEVELS = np.arange(-gd.WIN + gd.ROW / 2, gd.WIN, gd.ROW)
+    if colw is not None:
+        gd.COLW = float(colw)
+    if h is not None:
+        gd.H = int(h)
+    return dict(row=gd.ROW, colw=gd.COLW, h=gd.H)
+
+
+def grid_worker_init(grid: dict):
+    """DataLoader ``worker_init_fn`` that reapplies ``set_grid`` in each worker.
+
+    Windows workers are spawned, so they re-import ``gr2tvt_data`` fresh and would
+    otherwise build samples on the default grid while the model expects another.
+    """
+    def init(_worker_id):
+        set_grid(**grid)
+    return init
+
+
 # --------------------------------------------------------------------------- loading
 
 

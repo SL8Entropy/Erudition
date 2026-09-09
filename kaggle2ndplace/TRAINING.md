@@ -86,6 +86,82 @@ enormously on some wells the 1st-place model fails (`f5859199` 15.14 → 4.03,
 `e5864244` 5.85 → 26.48). Two methods with uncorrelated catastrophic wells are the
 textbook case for ensembling, and pooled RMSE is dominated by exactly those wells.
 
+## Switching models: the resolution ablation
+
+Two flags change the geometry. **Both default to the released `dzl_w1` config, so every
+command already in this file keeps running unchanged** — verified by rescoring
+`runs/dzl_w1/model_last.pt` after the flags were added and getting 6.5618 ft, bit-identical
+to before.
+
+| flag | default | effect |
+|---|---|---|
+| `--stem-stride` | `1` | `2` uses the stock EfficientNet stem instead of running stage 0 at full input resolution |
+| `--row` | `0.5` | vertical grid sampling in ft; `1.0` halves the input rows |
+
+`--row` also changes the **output** grid, because the model derives its state grid as
+`tq = T // 4`. So `--row 1.0` gives 256 input rows *and* 64 level bins of 4 ft instead of
+128 bins of 2 ft. Pair it with `--n-move 5` to keep the move vocabulary at the same
+physical ±20 ft it has in the baseline — otherwise `n_move=10` at 4 ft bins spans ±40 ft,
+and since real moves never exceed 8.4 ft per 32 ft column, most of those classes would
+never fire. (This is the same reasoning behind the author's own 16 ft family using
+`n_move=5`.)
+
+### The four variants
+
+Measured on this GPU at batch 6 / accum 2, with per-epoch times that match the real
+baseline run to within 0.4%:
+
+| | `--row` | `--stem-stride` | GFLOP/fwd | ms/sample | s/epoch | 120 epochs | peak VRAM |
+|---|---|---|---:|---:|---:|---:|---:|
+| **A** baseline | 0.5 | 1 | 15.7 | 45.1 | 27.9 | 56 min | 3.77 GiB |
+| **B** | 0.5 | 2 | 7.6 | 16.8 | 10.4 | **21 min** | 1.26 GiB |
+| **C** | 1.0 | 1 | 7.9 | 23.1 | 14.3 | 29 min | 1.91 GiB |
+| **D** | 1.0 | 2 | 3.8 | 10.0 | 6.2 | **12 min** | 0.64 GiB |
+
+B is 2.7× faster in wall clock against 2.1× in FLOPs, because it also drops clear of the
+memory-pressure point this 6 GB card hits above ~4 GiB.
+
+**B is the clean ablation.** It cuts compute while leaving the output grid, the bin size
+and the move vocabulary exactly as the baseline has them, so any RMSE change is
+attributable to compute alone. C and D additionally coarsen the output resolution, so
+they answer a different question — "can the task tolerate 4 ft bins?" — and a loss there
+cannot be blamed on the FLOP cut by itself.
+
+### Commands
+
+Run from `kaggle2ndplace/`. `runs/dzl_w1` is already variant A, so it needs no re-run.
+
+```bash
+python anchor_train.py --out runs/res_B_stride2 --stem-stride 2 --epochs 120 --eval-every 5 --tta 8
+```
+```bash
+python anchor_train.py --out runs/res_C_row1 --row 1.0 --n-move 5 --epochs 120 --eval-every 5 --tta 8
+```
+```bash
+python anchor_train.py --out runs/res_D_both --row 1.0 --stem-stride 2 --n-move 5 --epochs 120 --eval-every 5 --tta 8
+```
+
+Keep `--batch-size 6 --grad-accum 2` (the defaults) across all four. B and D leave a lot
+of VRAM free and would run faster at a larger batch, but changing it changes the effective
+batch and the BatchNorm statistics, which would confound the comparison.
+
+Rescoring a variant **must repeat its geometry flags**, or the grid will not match the
+checkpoint:
+
+```bash
+python anchor_eval.py --models runs/res_D_both/model_last.pt --out runs/res_D_both_tta8 --row 1.0 --stem-stride 2 --n-move 5 --tta 8
+```
+
+Judging a variant against the baseline, with the 1st-place repo's acceptance test:
+
+```bash
+python ../kaggle_1st_place/solution/seq_NN_robust_compare.py --base runs/dzl_w1 --treat runs/res_B_stride2 --output-dir runs/res_B_stride2
+```
+
+B + C + D together are about 62 minutes of GPU. Remember the noise floor: a single seed
+here cannot resolve differences under ~0.05 ft, so read a small regression as "no
+measurable cost", not as a win for the baseline.
+
 ## Is the pipeline right?
 
 The architecture defaults were read back from the released checkpoint

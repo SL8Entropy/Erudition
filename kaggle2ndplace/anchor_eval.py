@@ -31,7 +31,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "src"))
 
 import gr2tvt_data as gd                                    # noqa: E402
-from anchor_data import eval_rows, load_wells, split_wells, well_names  # noqa: E402
+from anchor_data import (eval_rows, load_wells, set_grid, split_wells,  # noqa: E402
+                         well_names)
 from anchor_train import build_model, predict_holdout, score, Logger    # noqa: E402
 
 
@@ -56,6 +57,11 @@ def parse_args(argv=None):
     p.add_argument("--fuse-div", type=int, default=4)
     p.add_argument("--n-move", type=int, default=10)
     p.add_argument("--drop-path", type=float, default=0.0)
+    p.add_argument("--win", type=float, default=128.0)
+    p.add_argument("--stem-stride", type=int, default=1, choices=[1, 2],
+                   help="must match the checkpoint's training config")
+    p.add_argument("--row", type=float, default=0.5,
+                   help="must match the checkpoint's training config")
     p.add_argument("--dzl-w", type=float, default=1.0,
                    help="only decides whether the dz_layer head exists; it is unused at inference")
     a = p.parse_args(argv)
@@ -74,6 +80,9 @@ def main(args):
     log(f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  {' '.join(sys.argv)}")
 
     device = torch.device(args.device)
+    set_grid(row=args.row)
+    log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols (row {gd.ROW} ft), "
+        f"stem_stride {args.stem_stride}")
     names = well_names(args.data)
     if args.limit_wells:
         names = names[:args.limit_wells]
