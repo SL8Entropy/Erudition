@@ -24,6 +24,7 @@
 *.pb
 *.model
 *.weights
+*.safetensors
 
 # Jupyter notebooks (can be very large with outputs)
 *.ipynb
@@ -32,6 +33,7 @@
 *.csv
 *.tsv
 *.parquet
+*.pqt
 *.feather
 *.arrow
 
@@ -70,3 +72,7 @@
 #models/
 #checkpoints/
 #pretrained/
+
+# Python bytecode
+__pycache__/
+*.pyc

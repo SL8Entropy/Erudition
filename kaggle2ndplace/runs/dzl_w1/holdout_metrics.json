@@ -1,0 +1,22 @@
+{
+  "pooled_rmse": 6.485304918978582,
+  "n_wells": 155,
+  "n_rows": 754122,
+  "well_rmse_mean": 4.646584114495588,
+  "well_rmse_p50": 3.664817684835076,
+  "well_rmse_p95": 11.331420105776045,
+  "sse_share_top5": 0.4300887082618844,
+  "worst_wells": {
+    "ea3a0e38": 23.15,
+    "e5864244": 26.477,
+    "f6d009f4": 19.591,
+    "d7eb0be8": 15.782,
+    "f6bc699b": 17.876
+  },
+  "failed_wells": [],
+  "epochs": 120,
+  "tta": 8,
+  "best_epoch": 99,
+  "best_epoch_rmse": 6.615271343791546,
+  "scored": "last"
+}

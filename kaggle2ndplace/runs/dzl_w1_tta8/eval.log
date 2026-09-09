@@ -1,0 +1,10 @@
+# 2026-09-09 20:13:04  anchor_eval.py --models runs/dzl_w1/model_last.pt --out runs/dzl_w1_tta8 --tta 8 --force
+holdout: 155 wells (first d07aed8f)
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+scored rows: 754,122
+MD phases: (np.float64(0.0), np.float64(8.0), np.float64(16.0), np.float64(24.0), np.float64(32.0), np.float64(40.0), np.float64(48.0), np.float64(56.0))
+model_last.pt: pooled RMSE 6.5618 ft  (38s)
+
+HOLDOUT POOLED RMSE: 6.5618 ft over 754,122 rows in 155 wells (1 ckpt x 8 phase)
+per-well RMSE  mean 4.642  p50 3.697  p95 11.407
+worst 5 wells carry 44% of the squared error: {'ea3a0e38': 26.75, 'e5864244': 25.879, 'f6d009f4': 15.938, 'd7eb0be8': 15.453, 'f6bc699b': 18.103}

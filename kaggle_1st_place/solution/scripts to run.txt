@@ -1,8 +1,0 @@
-The commands
-
-Run from solution/. Each ~2h; v2 and v3 somewhat slower for the added compute.
-
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v1_unimodal --epochs 60 --output-dir results/arch_v1_unimodal --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v2_axial --epochs 60 --output-dir results/arch_v2_axial --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v3_raft --epochs 60 --output-dir results/arch_v3_raft --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/arch --cfg-name arch_v4_lkconv --epochs 60 --output-dir results/arch_v4_lkconv --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
