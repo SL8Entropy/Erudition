@@ -127,6 +127,79 @@ attributable to compute alone. C and D additionally coarsen the output resolutio
 they answer a different question — "can the task tolerate 4 ft bins?" — and a loss there
 cannot be blamed on the FLOP cut by itself.
 
+### Results
+
+All four at 120 epochs, one seed, 8-phase TTA, scored on the same 155 wells.
+
+| | pooled RMSE | vs A | excl. `ea3a0e38` | plateau mean | plateau std | median well | wins | GFLOP | time |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **A** baseline | 6.485 | — | 5.949 | 6.865 | 0.167 | 3.665 | — | 15.7 | 56 m |
+| **B** stride 2 | 6.505 | +0.019 | 6.526 | 7.750 | 0.713 | 4.113 | 32% | 7.6 | 21 m |
+| **C** row 1.0 | **5.942** | −0.544 | 5.955 | **6.389** | 0.382 | 3.679 | 41% | 7.9 | 29 m |
+| **D** both | 7.644 | +1.159 | 7.684 | 8.571 | 0.655 | 4.789 | 26% | 3.8 | 12 m |
+| **E** row 2.0 | 7.405 | +0.920 | — | 8.006 | 0.418 | 4.838 | — | 3.9 | 18 m |
+
+"plateau mean/std" is over the eight single-phase evals from epoch 60 on — a far more
+stable statistic than one endpoint checkpoint. "wins" is the share of the 155 wells where
+the variant beats A.
+
+**`stem_stride=2` is not free — the prior behind this ablation was wrong.** B looks
+neutral in pooled RMSE (+0.019) but that is an artefact: run the acceptance test in the
+direction "is A better than B" and it gives **k\* = 145 of 155**, i.e. A's advantage
+survives deleting 145 wells, so the deficit is spread across essentially the whole
+holdout. It shows up everywhere else too — plateau mean +0.885, median well 3.665 →
+4.113, B wins on only 32% of wells, and B's checkpoint scatter is 4× A's (std 0.713 vs
+0.167). Running stage 0 at full input resolution is doing real work, and removing it also
+destabilises training. Keep `stem_stride=1`.
+
+**Halving the vertical sampling costs nothing measurable, and may help.** C matches A on
+the bulk — median well 3.679 vs 3.665, and excluding one well the pooled figures are
+5.955 vs 5.949 — while using **2× fewer FLOPs** and running 1.95× faster. Its plateau
+mean is 0.476 *better* than A's. The safe claim is "no measurable loss at half the
+compute"; the stronger claim ("C is better") is not established, because its endpoint
+pooled gain has **k\* = 1** — it rests on a single well.
+
+**Do not combine them.** D is worse than either change predicts: B alone +0.885 and C
+alone −0.476 on plateau means would predict about +0.41, but D is +1.706. The penalty is
+super-additive, which fits — D halves the stage-0 resolution twice over.
+
+**One well decides the headline.** `ea3a0e38` is 23.15 ft for A and 3.7–4.9 ft for all
+three variants; it alone moves the A-vs-C pooled delta from −0.544 to +0.006. The
+1st-place model scores 2.8 ft on it, so it is A that is anomalous, not the variants —
+A's 6.485 is likely a pessimistic single-seed draw and the honest baseline is nearer
+5.95. This is the same "the wells that decide it change identity every run" effect the
+1st-place repo documents, and it is why the endpoint pooled number should never be read
+on its own here.
+
+**The resolution ladder stops at `--row 1.0`.** E (`--row 2.0 --n-move 3`: 128 rows → 32
+bins of 8 ft) keeps the 2:1 ratio the rule demands and is 4× cheaper than A, but it is
+**1.46 ft worse than C**, with `k* = 124` of 155 and **100% of bootstrap draws** favouring
+C — the most decisive result in this whole study. The damage is broad, not tail-driven:
+median well 4.838 against C's 3.679.
+
+The mechanism is the one predicted before the run. At 8 ft bins the maximum real move of
+8.4 ft per 32 ft column is about one bin, so the move distribution collapses onto {0, ±1}
+and carries almost no information. You can watch it happen in the loss: E's
+cross-entropy falls to 0.22 against C's ~0.5, because classification became trivial —
+while the decoded path got much worse. **A low CE here is a warning sign, not progress.**
+
+One caveat: E was still descending at 120 epochs (−0.435 ft over epochs 90→119, while A
+was flat at +0.154), so it is undertrained. But it would have to find another 1.4 ft to
+reach C, for a saving of only 2× over C, so the trade is bad regardless.
+
+Net: the 2:1 rule is necessary but not sufficient. Resolution can come down until the
+move vocabulary stops resolving the physical step size, and that limit sits between 4 ft
+and 8 ft bins.
+
+**Confound to close.** C changed two things at once: `--row 1.0` *and* `--n-move 5`. To
+attribute the result to resolution rather than to the narrower vocabulary, run
+`--row 1.0` with `--n-move 10` (29 min). A clean `--n-move 5` control at `--row 0.5` is
+not available — it would cap moves at ±10 ft, below the 8.4 ft maximum in the data.
+
+Next step if you want C settled: 2–3 seeds of C against 2–3 of A. At 29 and 56 minutes
+that is roughly 4 hours, and it is the only thing that will resolve a 0.5 ft effect on
+155 wells.
+
 ### Commands
 
 Run from `kaggle2ndplace/`. `runs/dzl_w1` is already variant A, so it needs no re-run.

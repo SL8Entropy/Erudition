@@ -1,0 +1,95 @@
+{
+  "base": "C:\\Users\\sudha\\OneDrive\\Documents\\GitHub\\Erudition\\kaggle2ndplace\\runs\\dzl_w1\\holdout_predictions.pqt",
+  "treat": "C:\\Users\\sudha\\OneDrive\\Documents\\GitHub\\Erudition\\kaggle2ndplace\\runs\\res_C_row1\\holdout_predictions.pqt",
+  "pred_col": "TVT_pred",
+  "wells": 155,
+  "rows": 754122,
+  "base_pooled_rmse": 6.485304918978582,
+  "treat_pooled_rmse": 5.941584262598974,
+  "delta_pooled_rmse": -0.543720656379608,
+  "wells_improved": 63,
+  "wells_improved_share": 0.4064516129032258,
+  "k_star": 1,
+  "min_k": 10,
+  "verdict": "REJECT",
+  "top_contributors": [
+    {
+      "well_id": "ea3a0e38",
+      "sse_gap": -5147083.251522424,
+      "rows": 10052,
+      "base_well_rmse": 23.149601577225933,
+      "treat_well_rmse": 4.884502595706001
+    },
+    {
+      "well_id": "f6d009f4",
+      "sse_gap": -2026256.1407667836,
+      "rows": 6715,
+      "base_well_rmse": 19.591454335172884,
+      "treat_well_rmse": 9.059489755641467
+    },
+    {
+      "well_id": "fef8af96",
+      "sse_gap": 1086758.7645988055,
+      "rows": 3826,
+      "base_well_rmse": 10.949660290103015,
+      "treat_well_rmse": 20.098277006197574
+    },
+    {
+      "well_id": "e03b45fd",
+      "sse_gap": -783653.4276293111,
+      "rows": 5342,
+      "base_well_rmse": 14.779219792394915,
+      "treat_well_rmse": 8.469279899988491
+    },
+    {
+      "well_id": "d085e611",
+      "sse_gap": 730668.2233638156,
+      "rows": 6191,
+      "base_well_rmse": 4.026187453772313,
+      "treat_well_rmse": 11.585819768792158
+    },
+    {
+      "well_id": "e5864244",
+      "sse_gap": 449583.0818354208,
+      "rows": 4469,
+      "base_well_rmse": 26.47696269265329,
+      "treat_well_rmse": 28.31306994590802
+    },
+    {
+      "well_id": "fb73b13a",
+      "sse_gap": -398896.2838632533,
+      "rows": 5640,
+      "base_well_rmse": 9.933288454333397,
+      "treat_well_rmse": 5.286201665835056
+    },
+    {
+      "well_id": "e7818f7a",
+      "sse_gap": 371338.2769232341,
+      "rows": 5371,
+      "base_well_rmse": 5.7307822346622626,
+      "treat_well_rmse": 10.098490349815282
+    },
+    {
+      "well_id": "f2d4c8c9",
+      "sse_gap": 343264.86977374356,
+      "rows": 6249,
+      "base_well_rmse": 10.865298914559524,
+      "treat_well_rmse": 13.152409994120145
+    },
+    {
+      "well_id": "ee4aecac",
+      "sse_gap": 229427.88631738222,
+      "rows": 5265,
+      "base_well_rmse": 3.3961794142930013,
+      "treat_well_rmse": 7.423616463557085
+    }
+  ],
+  "bootstrap": {
+    "draws": 2000,
+    "mean": -0.5150968366968268,
+    "p05": -1.6095877218895822,
+    "p50": -0.45214904062888905,
+    "p95": 0.35982407523946286,
+    "share_improving": 0.798
+  }
+}
