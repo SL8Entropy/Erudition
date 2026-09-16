@@ -136,6 +136,13 @@ def ensure_backbone_weights(args, log) -> Path | None:
 
 
 def build_model(args, device, log=print):
+    if getattr(args, "arch", "effnet") == "separable":
+        from anchor_separable import SeparableAnchorNet
+        model = SeparableAnchorNet(T=gd.T, M=gd.H + args.ps_col, ps_col=args.ps_col,
+                                   win=args.win, n_move=args.n_move, fuse_div=args.fuse_div,
+                                   dzl_head=args.dzl_w > 0)
+        return model.to(device)
+
     kw = dict(backbone=args.backbone, in_chans=9, d=64, n_blocks=2,
               stem_stride=args.stem_stride, fuse_div=args.fuse_div, ps_col=args.ps_col,
               anchor_m=gd.H + args.ps_col, n_move=args.n_move,
@@ -183,23 +190,74 @@ def lr_at(step: int, total: int, args) -> float:
     return args.lr * 0.5 * (1.0 + math.cos(math.pi * t))
 
 
+def model_inputs(items, device, model):
+    """Whatever this model consumes: the 9-channel grid, or the 1-D arrays themselves."""
+    if getattr(model, "takes_items", False):
+        return model.inputs_from_items(items, device)
+    x, _ = items_to_x(items, device, model)
+    return x.to(memory_format=torch.channels_last)
+
+
+def load_teachers(paths, args, device, log=print):
+    """Frozen teacher models for distillation; they share the student's geometry."""
+    import copy as _copy
+    targs = _copy.copy(args)
+    targs.pretrained = False
+    targs.arch = getattr(args, "teacher_arch", "effnet")
+    teachers = []
+    for p in paths:
+        t = build_model(targs, device, log=log)
+        sd = torch.load(p, map_location=device)
+        t.load_state_dict(sd.get("model", sd) if isinstance(sd, dict) and "model" in sd else sd)
+        t.eval()
+        for q in t.parameters():
+            q.requires_grad_(False)
+        teachers.append(t)
+    return teachers
+
+
+def distill_loss(student_logits, teacher_probs, temp, ncol, t_cover, ps_col):
+    """KL(teacher || student) over the whole move field, not just the true path.
+
+    Teacher-forced cross-entropy only ever supervises the one anchor lying on the true
+    path.  The ensemble's field also says how the well would move *if* it were on a
+    different layer, which is exactly what the DP marginalises over when a match is
+    ambiguous; distilling every covered anchor is what transfers that.  Columns before
+    the prediction start and beyond the well, and rows outside typewell coverage, are
+    masked out.
+    """
+    B, V, Tq, M = student_logits.shape
+    logp = torch.log_softmax(student_logits.float() / temp, dim=1)
+    kl = (teacher_probs * (torch.log(teacher_probs.clamp_min(1e-8)) - logp)).sum(1)
+    cols = torch.arange(M, device=kl.device)[None, :]
+    colmask = (cols >= ps_col) & (cols < ncol[:, None])
+    rowmask = t_cover.view(B, Tq, -1).mean(-1) > 0.5
+    mask = (rowmask[:, :, None] & colmask[:, None, :]).float()
+    return (kl * mask).sum() / mask.sum().clamp_min(1.0) * temp * temp
+
+
 # ------------------------------------------------------------------------- evaluation
 
 
 @torch.no_grad()
-def predict_holdout(model, wells, names, device, args, phases=(0.0,), amp_dtype=None):
+def predict_holdout(model, wells, names, device, args, phases=(0.0,), amp_dtype=None,
+                    moments=None):
     """DP-decoded TVT for every scored row of every holdout well.
 
     Each MD phase is a separate build of the input grid, because re-phasing the 32 ft
     column boundaries changes the box-averaged GR itself.  Predictions are averaged
     after mapping back to raw MD, where all phases share one axis.
+
+    If ``moments`` is a dict, it is filled with ``well -> E[level^2]`` averaged over the
+    phases (level relative to TVT_PS), from which the spread of the belief follows.
     """
+    from anchor_uncertainty import dp_moments
     model.eval()
     out, failed = {}, []
     bs = args.val_batch_size
     for i in range(0, len(names), bs):
         chunk = names[i:i + bs]
-        acc = {}
+        acc, acc2 = {}, {}
         for ph in phases:
             items, metas, keep = [], {}, []
             for nm in chunk:
@@ -212,20 +270,34 @@ def predict_holdout(model, wells, names, device, args, phases=(0.0,), amp_dtype=
                 keep.append(nm)
             if not items:
                 continue
-            x, _ = items_to_x(items, device, model)
-            x = x.to(memory_format=torch.channels_last)
+            x = model_inputs(items, device, model)
             with torch.autocast(device_type=device.type, dtype=amp_dtype,
                                 enabled=amp_dtype is not None):
-                lv = model.predict_level(x)
-            lv = lv.float().cpu().numpy()
+                if moments is None:
+                    lv = model.predict_level(x)
+                else:
+                    fwd = model(x)
+            if moments is None:
+                lv = lv.float().cpu().numpy()
+            else:
+                e1, e2 = dp_moments(fwd[0].float(), fwd[1].float(), model.win,
+                                    start_col=model.ps_col)
+                lv, lv2 = e1.cpu().numpy(), e2.cpu().numpy()
             for j, nm in enumerate(keep):
                 ev = eval_rows(wells[nm])
                 mdq = wells[nm]["md"][ev].astype(np.float64)
                 p = gd.cols_to_md(lv[j], metas[nm], mdq)
                 acc[nm] = p if nm not in acc else acc[nm] + p
+                if moments is not None:
+                    m_ = metas[nm]
+                    xc = gd.col_centers(m_)
+                    q = np.interp(mdq, xc, lv2[j][m_["ps_col"]: m_["ps_col"] + m_["ncol"]])
+                    acc2[nm] = q if nm not in acc2 else acc2[nm] + q
         for nm in chunk:
             if nm in acc:
                 out[nm] = acc[nm] / len(phases)
+                if moments is not None:
+                    moments[nm] = acc2[nm] / len(phases)
             else:
                 failed.append(nm)
     return out, failed
@@ -287,10 +359,11 @@ def train(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    grid = set_grid(row=args.row)
+    grid = set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft)
     log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols "
         f"(row {gd.ROW} ft, colw {gd.COLW} ft), state grid {gd.T // 4} bins of "
-        f"{2 * args.win / (gd.T // 4):.1f} ft, stem_stride {args.stem_stride}")
+        f"{2 * args.win / (gd.T // 4):.1f} ft, stem_stride {args.stem_stride}, "
+        f"arch {args.arch}, GR prefilter {args.gr_prefilter_ft:g} ft")
 
     names = well_names(args.data)
     if args.limit_wells:
@@ -322,8 +395,13 @@ def train(args):
 
     model = build_model(args, device)
     n_par = sum(p.numel() for p in model.parameters())
-    log(f"model: {type(model).__name__} {n_par/1e6:.1f}M params, in_chans=9, "
-        f"n_move={args.n_move}, dzl_head={args.dzl_w > 0}, pretrained={args.pretrained}")
+    log(f"model: {type(model).__name__} {n_par/1e6:.2f}M params, "
+        f"n_move={args.n_move}, dzl_head={args.dzl_w > 0}, "
+        f"pretrained={args.pretrained and args.arch == 'effnet'}")
+    teachers = load_teachers(args.distill_teachers, args, device, log) if args.distill_teachers else []
+    if teachers:
+        log(f"distillation: {len(teachers)} frozen teacher(s), weight {args.distill_w}, "
+            f"temperature {args.distill_t}: {args.distill_teachers}")
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     ema = EMA(model, args.ema_decay) if args.ema_decay > 0 else None
@@ -342,12 +420,11 @@ def train(args):
         ds.set_epoch(epoch)
         model.train()
         t0 = time.time()
-        agg = dict(loss=0.0, ce=0.0, hb=0.0, oov=0.0, dzl=0.0, n=0)
+        agg = dict(loss=0.0, ce=0.0, hb=0.0, oov=0.0, dzl=0.0, kd=0.0, n=0)
         opt.zero_grad(set_to_none=True)
         for bi, batch in enumerate(dl):
             items = [b["item"] for b in batch]
-            x, _ = items_to_x(items, device, model)
-            x = x.to(memory_format=torch.channels_last)
+            x = model_inputs(items, device, model)
             y_bnd = torch.tensor(np.stack([it[6] for it in items]), device=device)
             d_n = torch.tensor(np.stack([it[13] for it in items]), device=device)
 
@@ -362,9 +439,23 @@ def train(args):
                 tgt, valid = dzl_target(y_bnd, d_n, gd.COLW, gd.DZ_SLOPE_SD)
                 l1, tv = dzl_loss(fwd[2].float(), tgt, valid, tv_w=args.dzl_tv)
                 loss = loss + args.dzl_w * l1 + args.dzl_tv * tv
+            kd = torch.zeros((), device=device)
+            if teachers:
+                same_inputs = (getattr(model, "takes_items", False)
+                               == getattr(teachers[0], "takes_items", False))
+                tx = x if same_inputs else model_inputs(items, device, teachers[0])
+                with torch.no_grad(), torch.autocast(device_type=device.type, dtype=amp_dtype,
+                                                     enabled=amp_dtype is not None):
+                    t_probs = sum(torch.softmax(t(tx)[0].float() / args.distill_t, dim=1)
+                                  for t in teachers) / len(teachers)
+                ncol = torch.tensor([it[5] for it in items], device=device)
+                t_cover = torch.tensor(np.stack([it[3] for it in items]), device=device)
+                kd = distill_loss(cls_logits, t_probs, args.distill_t, ncol, t_cover, args.ps_col)
+                loss = loss + args.distill_w * kd
 
             scaler.scale(loss / args.grad_accum).backward()
-            for k, v in (("loss", loss), ("ce", ce), ("hb", hb), ("oov", oov), ("dzl", l1)):
+            for k, v in (("loss", loss), ("ce", ce), ("hb", hb), ("oov", oov), ("dzl", l1),
+                         ("kd", kd)):
                 agg[k] += float(v.detach())
             agg["n"] += 1
 
@@ -384,7 +475,8 @@ def train(args):
         n = max(1, agg["n"])
         line = (f"epoch {epoch:3d}/{args.epochs}  loss {agg['loss']/n:.4f}  "
                 f"ce {agg['ce']/n:.4f}  huber {agg['hb']/n:.4f}  dzl {agg['dzl']/n:.4f}  "
-                f"oov {agg['oov']/n:.5f}  lr {lr_at(step, total_steps, args):.2e}  "
+                + (f"kd {agg['kd']/n:.4f}  " if teachers else "")
+                + f"oov {agg['oov']/n:.5f}  lr {lr_at(step, total_steps, args):.2e}  "
                 f"{time.time()-t0:.0f}s")
 
         last = epoch == args.epochs - 1
@@ -417,8 +509,21 @@ def train(args):
     preds, failed = predict_holdout(net, ho_wells, ho_names, device, args,
                                     phases=phases, amp_dtype=amp_dtype)
     metrics, df = score(ho_wells, preds, failed)
+    # Always also score one phase: it is what a single-pass deployment pays for, and the
+    # gap between the two is the TTA gain that the anti-aliasing experiment tries to absorb.
+    if len(phases) > 1:
+        p1, f1 = predict_holdout(net, ho_wells, ho_names, device, args,
+                                 phases=(0.0,), amp_dtype=amp_dtype)
+        m1, _ = score(ho_wells, p1, f1)
+        metrics.update(pooled_rmse_1phase=m1["pooled_rmse"],
+                       tta_gain=m1["pooled_rmse"] - metrics["pooled_rmse"])
     metrics.update(epochs=args.epochs, tta=args.tta, best_epoch=best["epoch"],
-                   best_epoch_rmse=best["pooled_rmse"], scored="best" if args.score_best else "last")
+                   best_epoch_rmse=best["pooled_rmse"], scored="best" if args.score_best else "last",
+                   arch=args.arch, row=args.row, n_move=args.n_move, seed=args.seed,
+                   epoch_len=args.epoch_len or len(tr_names),
+                   gr_prefilter_ft=args.gr_prefilter_ft,
+                   distill_teachers=list(args.distill_teachers or []),
+                   params_m=round(n_par / 1e6, 3))
 
     df.drop(columns=["sq_err"]).to_parquet(out_dir / "holdout_predictions.pqt", index=False)
     per = df.groupby("well_id")["sq_err"].agg(["mean", "sum", "size"])
@@ -432,6 +537,9 @@ def train(args):
     log("")
     log(f"HOLDOUT POOLED RMSE: {metrics['pooled_rmse']:.4f} ft "
         f"over {metrics['n_rows']:,} rows in {metrics['n_wells']} wells")
+    if "pooled_rmse_1phase" in metrics:
+        log(f"single phase: {metrics['pooled_rmse_1phase']:.4f} ft  "
+            f"(TTA gain {metrics['tta_gain']:+.4f} ft)")
     log(f"per-well RMSE  mean {metrics['well_rmse_mean']:.3f}  "
         f"p50 {metrics['well_rmse_p50']:.3f}  p95 {metrics['well_rmse_p95']:.3f}")
     log(f"worst 5 wells carry {metrics['sse_share_top5']*100:.0f}% of the squared error: "
@@ -490,6 +598,19 @@ def parse_args(argv=None):
     p.add_argument("--row", type=float, default=0.5,
                    help="vertical grid sampling in ft; also sets the output bin size "
                         "(0.5 -> 512 rows / 2 ft bins, 1.0 -> 256 rows / 4 ft bins)")
+    # cost experiments.  Every default reproduces the runs already in runs/.
+    p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
+                   help="effnet = the released EfficientNet-B0 trunk; separable = 1-D "
+                        "encoders + matching volume (anchor_separable.py)")
+    p.add_argument("--gr-prefilter-ft", type=float, default=0.0,
+                   help="anti-aliasing moving average on GR before column binning; "
+                        "32 matches the column width. 0 = off")
+    p.add_argument("--distill-teachers", nargs="*", default=[],
+                   help="frozen teacher checkpoints with this run's geometry; their mean "
+                        "move field is distilled into the student")
+    p.add_argument("--teacher-arch", choices=["effnet", "separable"], default="effnet")
+    p.add_argument("--distill-w", type=float, default=1.0)
+    p.add_argument("--distill-t", type=float, default=1.0)
 
     p.add_argument("--huber-w", type=float, default=1.0)
     p.add_argument("--soft-ce", action="store_true", help="interpolate the CE target between bins")

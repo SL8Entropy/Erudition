@@ -62,6 +62,13 @@ def parse_args(argv=None):
                    help="must match the checkpoint's training config")
     p.add_argument("--row", type=float, default=0.5,
                    help="must match the checkpoint's training config")
+    p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
+                   help="must match the checkpoint's training config")
+    p.add_argument("--gr-prefilter-ft", type=float, default=0.0,
+                   help="must match the checkpoint's training config")
+    p.add_argument("--save-std", action="store_true",
+                   help="also write TVT_std, the spread of the decoded belief combined across "
+                        "checkpoints and phases (law of total variance)")
     p.add_argument("--dzl-w", type=float, default=1.0,
                    help="only decides whether the dz_layer head exists; it is unused at inference")
     a = p.parse_args(argv)
@@ -80,9 +87,10 @@ def main(args):
     log(f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  {' '.join(sys.argv)}")
 
     device = torch.device(args.device)
-    set_grid(row=args.row)
+    set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft)
     log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols (row {gd.ROW} ft), "
-        f"stem_stride {args.stem_stride}")
+        f"stem_stride {args.stem_stride}, arch {args.arch}, "
+        f"GR prefilter {args.gr_prefilter_ft:g} ft")
     names = well_names(args.data)
     if args.limit_wells:
         names = names[:args.limit_wells]
@@ -97,23 +105,47 @@ def main(args):
     amp_dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "off": None}[args.amp]
 
     model = build_model(args, device, log=log)
-    acc, failed_any = {}, set()
+    acc, acc2, failed_any = {}, {}, set()
     for ck in args.models:
         sd = torch.load(ck, map_location=device)
         sd = sd.get("model", sd) if isinstance(sd, dict) and "model" in sd else sd
         model.load_state_dict(sd)
         t0 = time.time()
+        mom = {} if args.save_std else None
         preds, failed = predict_holdout(model, ho_wells, ho_names, device, args,
-                                        phases=phases, amp_dtype=amp_dtype)
+                                        phases=phases, amp_dtype=amp_dtype, moments=mom)
         failed_any |= set(failed)
         for k, v in preds.items():
             acc[k] = v if k not in acc else acc[k] + v
+            if mom is not None:
+                acc2[k] = mom[k] if k not in acc2 else acc2[k] + mom[k]
         m, _ = score(ho_wells, preds, failed)
         log(f"{Path(ck).name}: pooled RMSE {m['pooled_rmse']:.4f} ft  ({time.time()-t0:.0f}s)")
 
     preds = {k: v / len(args.models) for k, v in acc.items()}
     metrics, df = score(ho_wells, preds, sorted(failed_any))
-    metrics.update(models=[str(m) for m in args.models], tta=args.tta)
+    metrics.update(models=[str(m) for m in args.models], tta=args.tta, arch=args.arch,
+                   row=args.row, n_move=args.n_move, gr_prefilter_ft=args.gr_prefilter_ft)
+
+    if args.save_std:
+        # E[x^2] and E[x] are each averaged over every (checkpoint, phase) view, so
+        # var = E[x^2] - E[x]^2 is the mixture variance: within-view belief spread plus
+        # disagreement between views.  Levels are relative to TVT_PS, which is shared.
+        std = {}
+        for k, e2 in acc2.items():
+            ti = ho_wells[k]["tvt_input"]
+            tvt_ps = float(ti[np.isfinite(ti)][-1])
+            mean_rel = preds[k] - tvt_ps
+            std[k] = np.sqrt(np.clip(e2 / len(args.models) - mean_rel ** 2, 0.0, None))
+        df["TVT_std"] = np.nan
+        for k, s_ in std.items():
+            sel = (df["well_id"] == k).to_numpy()
+            df.loc[sel, "TVT_std"] = s_       # both ordered by ascending row index
+        abs_err = np.sqrt(df["sq_err"].to_numpy())
+        ok = np.isfinite(df["TVT_std"].to_numpy())
+        metrics["std_error_spearman"] = float(pd.Series(df["TVT_std"][ok]).corr(
+            pd.Series(abs_err[ok]), method="spearman"))
+        log(f"belief spread vs |error|, Spearman rho = {metrics['std_error_spearman']:.3f}")
 
     df.drop(columns=["sq_err"]).to_parquet(out_dir / "holdout_predictions.pqt", index=False)
     per = df.groupby("well_id")["sq_err"].agg(["mean", "sum", "size"])

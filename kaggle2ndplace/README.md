@@ -6,7 +6,9 @@ Private leaderboard 5.802.
 > **Local training** (added here, not part of the released bundle): `anchor_data.py` and
 > `anchor_train.py` train one model of the 32 ft `dzl_w1` family on 80% of the wells in
 > `data/` and score the held-out 20%, reusing the author's `src/` modules unmodified.
-> `anchor_eval.py` rescores a checkpoint. See [TRAINING.md](TRAINING.md).
+> `anchor_eval.py` rescores a checkpoint. Round-2 cost experiments add `anchor_separable.py`
+> (1-D encoder model), `anchor_quantize.py` (int8), `anchor_ensemble.py` (AnchorCNN + 1st-place
+> ConvNeXt gate), `anchor_uncertainty.py` and `anchor_summary.py`. See [TRAINING.md](TRAINING.md).
 
 ## Contents
 

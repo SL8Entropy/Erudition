@@ -1,0 +1,134 @@
+# 2026-09-16 14:42:16  anchor_train.py --out runs/X_distill --row 1.0 --n-move 5 --epoch-len 618 --epochs 120 --eval-every 5 --tta 8 --seed 46013 --distill-teachers runs/C_s1/model_last.pt runs/C_s2/model_last.pt runs/C_s3/model_last.pt
+grid: 256 rows x 336 cols (row 1.0 ft, colw 32.0 ft), state grid 64 bins of 4.0 ft, stem_stride 1, arch effnet, GR prefilter 0 ft
+wells: 773 total -> 618 train / 155 holdout (first holdout d07aed8f)
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+scored rows in holdout: 754,122
+model: GR2TVTAnchorNet 3.74M params, n_move=5, dzl_head=True, pretrained=True
+distillation: 3 frozen teacher(s), weight 1.0, temperature 1.0: ['runs/C_s1/model_last.pt', 'runs/C_s2/model_last.pt', 'runs/C_s3/model_last.pt']
+schedule: 120 epochs x 51 steps (batch 6 x accum 2), lr 0.001, warmup 200
+epoch   0/120  loss 3.6336  ce 1.8521  huber 0.0416  dzl 1.1134  kd 0.6265  oov 0.00007  lr 2.60e-04  44s
+epoch   1/120  loss 1.9507  ce 0.6217  huber 0.0417  dzl 1.0643  kd 0.2230  oov 0.00008  lr 5.15e-04  26s
+epoch   2/120  loss 1.5305  ce 0.5752  huber 0.0421  dzl 0.7307  kd 0.1825  oov 0.00008  lr 7.70e-04  26s
+epoch   3/120  loss 1.2716  ce 0.5748  huber 0.0418  dzl 0.4796  kd 0.1754  oov 0.00007  lr 1.00e-03  26s
+epoch   4/120  loss 1.1522  ce 0.5413  huber 0.0417  dzl 0.4165  kd 0.1527  oov 0.00008  lr 1.00e-03  26s  | holdout pooled RMSE 15.1840 ft
+epoch   5/120  loss 1.1487  ce 0.5459  huber 0.0418  dzl 0.4102  kd 0.1507  oov 0.00007  lr 1.00e-03  26s
+epoch   6/120  loss 1.0887  ce 0.5263  huber 0.0416  dzl 0.3928  kd 0.1280  oov 0.00009  lr 1.00e-03  26s
+epoch   7/120  loss 1.0557  ce 0.5019  huber 0.0420  dzl 0.3938  kd 0.1180  oov 0.00010  lr 1.00e-03  26s
+epoch   8/120  loss 1.0034  ce 0.4694  huber 0.0414  dzl 0.3914  kd 0.1011  oov 0.00007  lr 1.00e-03  26s
+epoch   9/120  loss 0.9514  ce 0.4431  huber 0.0414  dzl 0.3823  kd 0.0846  oov 0.00008  lr 1.00e-03  26s  | holdout pooled RMSE 12.0129 ft
+epoch  10/120  loss 0.9339  ce 0.4390  huber 0.0417  dzl 0.3756  kd 0.0776  oov 0.00008  lr 1.00e-03  26s
+epoch  11/120  loss 0.9328  ce 0.4355  huber 0.0414  dzl 0.3790  kd 0.0770  oov 0.00013  lr 1.00e-03  26s
+epoch  12/120  loss 0.9134  ce 0.4252  huber 0.0418  dzl 0.3729  kd 0.0736  oov 0.00014  lr 1.00e-03  26s
+epoch  13/120  loss 0.9103  ce 0.4251  huber 0.0415  dzl 0.3737  kd 0.0700  oov 0.00016  lr 1.00e-03  26s
+epoch  14/120  loss 0.8940  ce 0.4203  huber 0.0407  dzl 0.3672  kd 0.0659  oov 0.00011  lr 1.00e-03  26s  | holdout pooled RMSE 9.3192 ft
+epoch  15/120  loss 0.8785  ce 0.4172  huber 0.0392  dzl 0.3588  kd 0.0633  oov 0.00008  lr 1.00e-03  26s
+epoch  16/120  loss 0.8601  ce 0.4042  huber 0.0386  dzl 0.3583  kd 0.0590  oov 0.00014  lr 1.00e-03  26s
+epoch  17/120  loss 0.8655  ce 0.4058  huber 0.0378  dzl 0.3640  kd 0.0580  oov 0.00008  lr 1.00e-03  26s
+epoch  18/120  loss 0.8593  ce 0.3996  huber 0.0370  dzl 0.3648  kd 0.0579  oov 0.00006  lr 1.00e-03  26s
+epoch  19/120  loss 0.8425  ce 0.3954  huber 0.0364  dzl 0.3550  kd 0.0556  oov 0.00009  lr 1.00e-03  26s  | holdout pooled RMSE 8.5207 ft
+epoch  20/120  loss 0.8390  ce 0.3966  huber 0.0372  dzl 0.3518  kd 0.0533  oov 0.00009  lr 1.00e-03  26s
+epoch  21/120  loss 0.8388  ce 0.3926  huber 0.0355  dzl 0.3576  kd 0.0532  oov 0.00007  lr 1.00e-03  26s
+epoch  22/120  loss 0.8386  ce 0.3903  huber 0.0355  dzl 0.3628  kd 0.0500  oov 0.00008  lr 1.00e-03  26s
+epoch  23/120  loss 0.8266  ce 0.3873  huber 0.0358  dzl 0.3542  kd 0.0492  oov 0.00010  lr 1.00e-03  26s
+epoch  24/120  loss 0.8132  ce 0.3830  huber 0.0352  dzl 0.3463  kd 0.0487  oov 0.00017  lr 1.00e-03  26s  | holdout pooled RMSE 7.7904 ft
+epoch  25/120  loss 0.8085  ce 0.3786  huber 0.0342  dzl 0.3496  kd 0.0461  oov 0.00016  lr 1.00e-03  26s
+epoch  26/120  loss 0.8030  ce 0.3783  huber 0.0343  dzl 0.3446  kd 0.0458  oov 0.00014  lr 1.00e-03  26s
+epoch  27/120  loss 0.7914  ce 0.3751  huber 0.0343  dzl 0.3364  kd 0.0456  oov 0.00006  lr 1.00e-03  26s
+epoch  28/120  loss 0.7914  ce 0.3756  huber 0.0339  dzl 0.3393  kd 0.0425  oov 0.00012  lr 1.00e-03  26s
+epoch  29/120  loss 0.7842  ce 0.3690  huber 0.0333  dzl 0.3379  kd 0.0440  oov 0.00010  lr 1.00e-03  26s  | holdout pooled RMSE 7.6727 ft
+epoch  30/120  loss 0.7832  ce 0.3685  huber 0.0330  dzl 0.3374  kd 0.0443  oov 0.00008  lr 1.00e-03  26s
+epoch  31/120  loss 0.7949  ce 0.3783  huber 0.0337  dzl 0.3389  kd 0.0440  oov 0.00006  lr 1.00e-03  26s
+epoch  32/120  loss 0.7807  ce 0.3679  huber 0.0330  dzl 0.3383  kd 0.0416  oov 0.00004  lr 1.00e-03  26s
+epoch  33/120  loss 0.7873  ce 0.3770  huber 0.0334  dzl 0.3370  kd 0.0400  oov 0.00010  lr 1.00e-03  26s
+epoch  34/120  loss 0.7724  ce 0.3657  huber 0.0326  dzl 0.3335  kd 0.0405  oov 0.00009  lr 1.00e-03  26s  | holdout pooled RMSE 6.9399 ft
+epoch  35/120  loss 0.7782  ce 0.3710  huber 0.0326  dzl 0.3339  kd 0.0407  oov 0.00016  lr 1.00e-03  26s
+epoch  36/120  loss 0.7612  ce 0.3600  huber 0.0316  dzl 0.3304  kd 0.0392  oov 0.00007  lr 1.00e-03  26s
+epoch  37/120  loss 0.7676  ce 0.3611  huber 0.0313  dzl 0.3355  kd 0.0396  oov 0.00010  lr 1.00e-03  26s
+epoch  38/120  loss 0.7634  ce 0.3640  huber 0.0315  dzl 0.3300  kd 0.0380  oov 0.00011  lr 1.00e-03  26s
+epoch  39/120  loss 0.7586  ce 0.3597  huber 0.0311  dzl 0.3315  kd 0.0364  oov 0.00012  lr 1.00e-03  26s  | holdout pooled RMSE 6.7779 ft
+epoch  40/120  loss 0.7522  ce 0.3565  huber 0.0315  dzl 0.3275  kd 0.0366  oov 0.00013  lr 1.00e-03  26s
+epoch  41/120  loss 0.7454  ce 0.3504  huber 0.0309  dzl 0.3258  kd 0.0382  oov 0.00017  lr 1.00e-03  26s
+epoch  42/120  loss 0.7549  ce 0.3530  huber 0.0311  dzl 0.3354  kd 0.0355  oov 0.00006  lr 1.00e-03  26s
+epoch  43/120  loss 0.7535  ce 0.3586  huber 0.0311  dzl 0.3277  kd 0.0361  oov 0.00010  lr 1.00e-03  26s
+epoch  44/120  loss 0.7540  ce 0.3582  huber 0.0309  dzl 0.3305  kd 0.0345  oov 0.00019  lr 1.00e-03  26s  | holdout pooled RMSE 6.7070 ft
+epoch  45/120  loss 0.7457  ce 0.3544  huber 0.0312  dzl 0.3253  kd 0.0349  oov 0.00009  lr 1.00e-03  26s
+epoch  46/120  loss 0.7380  ce 0.3509  huber 0.0310  dzl 0.3221  kd 0.0340  oov 0.00010  lr 1.00e-03  26s
+epoch  47/120  loss 0.7444  ce 0.3512  huber 0.0300  dzl 0.3274  kd 0.0359  oov 0.00014  lr 1.00e-03  26s
+epoch  48/120  loss 0.7350  ce 0.3465  huber 0.0300  dzl 0.3249  kd 0.0336  oov 0.00006  lr 1.00e-03  26s
+epoch  49/120  loss 0.7382  ce 0.3501  huber 0.0303  dzl 0.3238  kd 0.0340  oov 0.00010  lr 1.00e-03  26s  | holdout pooled RMSE 6.6245 ft
+epoch  50/120  loss 0.7331  ce 0.3508  huber 0.0306  dzl 0.3182  kd 0.0334  oov 0.00009  lr 1.00e-03  26s
+epoch  51/120  loss 0.7319  ce 0.3500  huber 0.0296  dzl 0.3193  kd 0.0330  oov 0.00012  lr 1.00e-03  26s
+epoch  52/120  loss 0.7398  ce 0.3494  huber 0.0300  dzl 0.3281  kd 0.0323  oov 0.00010  lr 1.00e-03  26s
+epoch  53/120  loss 0.7285  ce 0.3488  huber 0.0295  dzl 0.3180  kd 0.0323  oov 0.00010  lr 1.00e-03  27s
+epoch  54/120  loss 0.7343  ce 0.3478  huber 0.0298  dzl 0.3233  kd 0.0333  oov 0.00009  lr 1.00e-03  27s  | holdout pooled RMSE 6.3463 ft
+epoch  55/120  loss 0.7332  ce 0.3476  huber 0.0298  dzl 0.3242  kd 0.0317  oov 0.00011  lr 1.00e-03  26s
+epoch  56/120  loss 0.7157  ce 0.3380  huber 0.0294  dzl 0.3160  kd 0.0322  oov 0.00009  lr 1.00e-03  26s
+epoch  57/120  loss 0.7268  ce 0.3450  huber 0.0298  dzl 0.3190  kd 0.0330  oov 0.00008  lr 1.00e-03  26s
+epoch  58/120  loss 0.7261  ce 0.3434  huber 0.0296  dzl 0.3207  kd 0.0323  oov 0.00009  lr 1.00e-03  26s
+epoch  59/120  loss 0.7203  ce 0.3435  huber 0.0295  dzl 0.3162  kd 0.0311  oov 0.00015  lr 1.00e-03  26s  | holdout pooled RMSE 6.5173 ft
+epoch  60/120  loss 0.7040  ce 0.3337  huber 0.0290  dzl 0.3114  kd 0.0298  oov 0.00012  lr 1.00e-03  27s
+epoch  61/120  loss 0.7189  ce 0.3419  huber 0.0293  dzl 0.3178  kd 0.0299  oov 0.00008  lr 1.00e-03  26s
+epoch  62/120  loss 0.7144  ce 0.3418  huber 0.0293  dzl 0.3139  kd 0.0294  oov 0.00012  lr 1.00e-03  26s
+epoch  63/120  loss 0.7119  ce 0.3374  huber 0.0288  dzl 0.3147  kd 0.0310  oov 0.00010  lr 1.00e-03  27s
+epoch  64/120  loss 0.7063  ce 0.3364  huber 0.0293  dzl 0.3098  kd 0.0307  oov 0.00006  lr 1.00e-03  27s  | holdout pooled RMSE 6.4519 ft
+epoch  65/120  loss 0.7027  ce 0.3347  huber 0.0287  dzl 0.3093  kd 0.0300  oov 0.00009  lr 1.00e-03  26s
+epoch  66/120  loss 0.6996  ce 0.3302  huber 0.0284  dzl 0.3100  kd 0.0309  oov 0.00015  lr 1.00e-03  26s
+epoch  67/120  loss 0.7083  ce 0.3351  huber 0.0289  dzl 0.3142  kd 0.0301  oov 0.00014  lr 1.00e-03  26s
+epoch  68/120  loss 0.7067  ce 0.3360  huber 0.0287  dzl 0.3124  kd 0.0295  oov 0.00011  lr 1.00e-03  26s
+epoch  69/120  loss 0.7000  ce 0.3297  huber 0.0283  dzl 0.3131  kd 0.0290  oov 0.00012  lr 1.00e-03  27s  | holdout pooled RMSE 6.1262 ft
+epoch  70/120  loss 0.7062  ce 0.3373  huber 0.0292  dzl 0.3118  kd 0.0280  oov 0.00014  lr 1.00e-03  26s
+epoch  71/120  loss 0.7124  ce 0.3388  huber 0.0286  dzl 0.3169  kd 0.0280  oov 0.00006  lr 1.00e-03  26s
+epoch  72/120  loss 0.6920  ce 0.3323  huber 0.0285  dzl 0.3043  kd 0.0268  oov 0.00006  lr 1.00e-03  27s
+epoch  73/120  loss 0.7153  ce 0.3416  huber 0.0294  dzl 0.3148  kd 0.0295  oov 0.00004  lr 1.00e-03  27s
+epoch  74/120  loss 0.7028  ce 0.3366  huber 0.0292  dzl 0.3087  kd 0.0283  oov 0.00007  lr 1.00e-03  27s  | holdout pooled RMSE 6.2126 ft
+epoch  75/120  loss 0.7042  ce 0.3350  huber 0.0281  dzl 0.3132  kd 0.0279  oov 0.00010  lr 1.00e-03  27s
+epoch  76/120  loss 0.7001  ce 0.3341  huber 0.0288  dzl 0.3094  kd 0.0278  oov 0.00012  lr 1.00e-03  27s
+epoch  77/120  loss 0.7007  ce 0.3323  huber 0.0288  dzl 0.3111  kd 0.0286  oov 0.00007  lr 1.00e-03  26s
+epoch  78/120  loss 0.6975  ce 0.3326  huber 0.0285  dzl 0.3090  kd 0.0274  oov 0.00007  lr 1.00e-03  26s
+epoch  79/120  loss 0.6909  ce 0.3292  huber 0.0285  dzl 0.3048  kd 0.0283  oov 0.00008  lr 1.00e-03  26s  | holdout pooled RMSE 6.2085 ft
+epoch  80/120  loss 0.6905  ce 0.3305  huber 0.0278  dzl 0.3041  kd 0.0280  oov 0.00010  lr 1.00e-03  27s
+epoch  81/120  loss 0.6849  ce 0.3263  huber 0.0283  dzl 0.3032  kd 0.0271  oov 0.00007  lr 1.00e-03  26s
+epoch  82/120  loss 0.6882  ce 0.3296  huber 0.0280  dzl 0.3042  kd 0.0263  oov 0.00008  lr 1.00e-03  26s
+epoch  83/120  loss 0.6928  ce 0.3301  huber 0.0283  dzl 0.3074  kd 0.0270  oov 0.00011  lr 1.00e-03  26s
+epoch  84/120  loss 0.6928  ce 0.3327  huber 0.0285  dzl 0.3053  kd 0.0264  oov 0.00013  lr 1.00e-03  26s  | holdout pooled RMSE 6.2971 ft
+epoch  85/120  loss 0.6881  ce 0.3299  huber 0.0275  dzl 0.3040  kd 0.0267  oov 0.00007  lr 1.00e-03  27s
+epoch  86/120  loss 0.6760  ce 0.3244  huber 0.0282  dzl 0.2979  kd 0.0256  oov 0.00010  lr 1.00e-03  26s
+epoch  87/120  loss 0.6781  ce 0.3225  huber 0.0279  dzl 0.3021  kd 0.0256  oov 0.00009  lr 1.00e-03  26s
+epoch  88/120  loss 0.6917  ce 0.3310  huber 0.0281  dzl 0.3067  kd 0.0259  oov 0.00015  lr 1.00e-03  26s
+epoch  89/120  loss 0.6849  ce 0.3247  huber 0.0278  dzl 0.3064  kd 0.0261  oov 0.00020  lr 1.00e-03  27s  | holdout pooled RMSE 6.3010 ft
+epoch  90/120  loss 0.6817  ce 0.3266  huber 0.0279  dzl 0.3013  kd 0.0259  oov 0.00015  lr 1.00e-03  27s
+epoch  91/120  loss 0.6708  ce 0.3192  huber 0.0274  dzl 0.2991  kd 0.0251  oov 0.00009  lr 1.00e-03  26s
+epoch  92/120  loss 0.6767  ce 0.3259  huber 0.0277  dzl 0.2981  kd 0.0249  oov 0.00017  lr 1.00e-03  26s
+epoch  93/120  loss 0.6787  ce 0.3223  huber 0.0270  dzl 0.3037  kd 0.0257  oov 0.00007  lr 1.00e-03  26s
+epoch  94/120  loss 0.6696  ce 0.3216  huber 0.0277  dzl 0.2950  kd 0.0254  oov 0.00006  lr 1.00e-03  26s  | holdout pooled RMSE 6.2377 ft
+epoch  95/120  loss 0.6744  ce 0.3213  huber 0.0272  dzl 0.2995  kd 0.0264  oov 0.00010  lr 1.00e-03  26s
+epoch  96/120  loss 0.6765  ce 0.3269  huber 0.0277  dzl 0.2954  kd 0.0265  oov 0.00010  lr 1.00e-03  26s
+epoch  97/120  loss 0.6847  ce 0.3286  huber 0.0273  dzl 0.3044  kd 0.0243  oov 0.00010  lr 1.00e-03  26s
+epoch  98/120  loss 0.6659  ce 0.3186  huber 0.0272  dzl 0.2953  kd 0.0248  oov 0.00009  lr 1.00e-03  27s
+epoch  99/120  loss 0.6618  ce 0.3166  huber 0.0268  dzl 0.2934  kd 0.0251  oov 0.00004  lr 1.00e-03  26s  | holdout pooled RMSE 6.2415 ft
+epoch 100/120  loss 0.6761  ce 0.3240  huber 0.0273  dzl 0.2986  kd 0.0262  oov 0.00006  lr 1.00e-03  26s
+epoch 101/120  loss 0.6657  ce 0.3188  huber 0.0269  dzl 0.2951  kd 0.0248  oov 0.00009  lr 1.00e-03  27s
+epoch 102/120  loss 0.6773  ce 0.3264  huber 0.0274  dzl 0.2987  kd 0.0247  oov 0.00012  lr 1.00e-03  27s
+epoch 103/120  loss 0.6591  ce 0.3172  huber 0.0262  dzl 0.2913  kd 0.0244  oov 0.00008  lr 1.00e-03  26s
+epoch 104/120  loss 0.6749  ce 0.3200  huber 0.0272  dzl 0.3003  kd 0.0273  oov 0.00011  lr 1.00e-03  27s  | holdout pooled RMSE 6.3530 ft
+epoch 105/120  loss 0.6732  ce 0.3233  huber 0.0275  dzl 0.2974  kd 0.0249  oov 0.00013  lr 1.00e-03  26s
+epoch 106/120  loss 0.6662  ce 0.3220  huber 0.0265  dzl 0.2940  kd 0.0238  oov 0.00005  lr 1.00e-03  26s
+epoch 107/120  loss 0.6808  ce 0.3267  huber 0.0272  dzl 0.3022  kd 0.0246  oov 0.00011  lr 1.00e-03  27s
+epoch 108/120  loss 0.6690  ce 0.3214  huber 0.0271  dzl 0.2958  kd 0.0247  oov 0.00009  lr 1.00e-03  27s
+epoch 109/120  loss 0.6747  ce 0.3236  huber 0.0269  dzl 0.2988  kd 0.0253  oov 0.00010  lr 1.00e-03  26s  | holdout pooled RMSE 6.3486 ft
+epoch 110/120  loss 0.6680  ce 0.3187  huber 0.0271  dzl 0.2980  kd 0.0242  oov 0.00011  lr 1.00e-03  26s
+epoch 111/120  loss 0.6606  ce 0.3173  huber 0.0272  dzl 0.2921  kd 0.0240  oov 0.00015  lr 1.00e-03  26s
+epoch 112/120  loss 0.6524  ce 0.3142  huber 0.0269  dzl 0.2874  kd 0.0239  oov 0.00009  lr 1.00e-03  26s
+epoch 113/120  loss 0.6606  ce 0.3165  huber 0.0271  dzl 0.2930  kd 0.0241  oov 0.00012  lr 1.00e-03  26s
+epoch 114/120  loss 0.6619  ce 0.3197  huber 0.0265  dzl 0.2913  kd 0.0244  oov 0.00012  lr 1.00e-03  26s  | holdout pooled RMSE 6.3500 ft
+epoch 115/120  loss 0.6583  ce 0.3185  huber 0.0266  dzl 0.2897  kd 0.0234  oov 0.00010  lr 1.00e-03  27s
+epoch 116/120  loss 0.6574  ce 0.3205  huber 0.0263  dzl 0.2875  kd 0.0231  oov 0.00007  lr 1.00e-03  27s
+epoch 117/120  loss 0.6504  ce 0.3163  huber 0.0267  dzl 0.2847  kd 0.0227  oov 0.00007  lr 1.00e-03  27s
+epoch 118/120  loss 0.6588  ce 0.3176  huber 0.0266  dzl 0.2916  kd 0.0231  oov 0.00009  lr 1.00e-03  29s
+epoch 119/120  loss 0.6552  ce 0.3149  huber 0.0262  dzl 0.2899  kd 0.0243  oov 0.00007  lr 1.00e-03  28s  | holdout pooled RMSE 6.3659 ft
+final holdout pass: 8 MD phase(s) (np.float64(0.0), np.float64(8.0), np.float64(16.0), np.float64(24.0), np.float64(32.0), np.float64(40.0), np.float64(48.0), np.float64(56.0))
+
+HOLDOUT POOLED RMSE: 6.2520 ft over 754,122 rows in 155 wells
+single phase: 6.3659 ft  (TTA gain +0.1139 ft)
+per-well RMSE  mean 4.714  p50 3.455  p95 12.243
+worst 5 wells carry 32% of the squared error: {'e5864244': 31.778, 'f6d009f4': 14.871, 'f6bc699b': 17.627, 'fb03ae90': 13.322, 'd7eb0be8': 14.073}

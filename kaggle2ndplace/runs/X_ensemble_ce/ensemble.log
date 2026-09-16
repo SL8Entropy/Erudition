@@ -1,0 +1,27 @@
+# 2026-09-16 17:00:58  anchor_ensemble.py --anchor runs/C_seeds_tta8/holdout_predictions.pqt --convnext ../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt --out runs/X_ensemble_ce --gate-ce-w 10 --gate-epochs 150
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+155 wells, 754,122 rows; anchor std feature present; convnext neighbour feature present
+fold 0: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.141  convnext 4.888
+    gate     ce_w=0     mean w=0.499  decisiveness=0.005  train MSE 20.865 / CE 0.000  fold RMSE 4.477
+    gate_ce  ce_w=10    mean w=0.499  decisiveness=0.005  train MSE 21.143 / CE 0.667  fold RMSE 4.477
+fold 1: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.285  convnext 5.431
+    gate     ce_w=0     mean w=0.498  decisiveness=0.009  train MSE 20.775 / CE 0.000  fold RMSE 6.022
+    gate_ce  ce_w=10    mean w=0.471  decisiveness=0.104  train MSE 20.769 / CE 0.659  fold RMSE 5.985
+fold 2: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.182  convnext 4.735
+    gate     ce_w=0     mean w=0.499  decisiveness=0.007  train MSE 21.837 / CE 0.000  fold RMSE 4.676
+    gate_ce  ce_w=10    mean w=0.499  decisiveness=0.007  train MSE 22.097 / CE 0.676  fold RMSE 4.675
+fold 3: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.168  convnext 4.923
+    gate     ce_w=0     mean w=0.477  decisiveness=0.099  train MSE 18.036 / CE 0.000  fold RMSE 4.735
+    gate_ce  ce_w=10    mean w=0.476  decisiveness=0.100  train MSE 17.988 / CE 0.655  fold RMSE 4.730
+fold 4: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.230  convnext 4.668
+    gate     ce_w=0     mean w=0.442  decisiveness=0.204  train MSE 21.857 / CE 0.000  fold RMSE 5.032
+    gate_ce  ce_w=10    mean w=0.425  decisiveness=0.222  train MSE 21.899 / CE 0.644  fold RMSE 5.060
+
+method         pooled  median well  p95 well   mean w  decisive
+convnext       4.9374        2.835     9.727
+anchor         5.9929        3.442    12.383
+mean           5.0350        3.034    10.582
+global_w       4.9053        2.761     9.779
+gate           5.0170        3.035    10.521    0.483     0.065
+gate_ce        5.0129        3.012    10.800    0.474     0.088
+oracle_row     4.0107        2.060     7.640   (uses the answer; upper bound)

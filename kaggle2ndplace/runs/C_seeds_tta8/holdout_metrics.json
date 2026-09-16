@@ -1,0 +1,28 @@
+{
+  "pooled_rmse": 5.992915520909085,
+  "n_wells": 155,
+  "n_rows": 754122,
+  "well_rmse_mean": 4.533026240124792,
+  "well_rmse_p50": 3.442304835506983,
+  "well_rmse_p95": 12.383229837274145,
+  "sse_share_top5": 0.34232074856730466,
+  "worst_wells": {
+    "f6d009f4": 20.218,
+    "e5864244": 23.531,
+    "fb03ae90": 15.105,
+    "f2d4c8c9": 14.503,
+    "f6bc699b": 18.401
+  },
+  "failed_wells": [],
+  "models": [
+    "runs/C_s1/model_last.pt",
+    "runs/C_s2/model_last.pt",
+    "runs/C_s3/model_last.pt"
+  ],
+  "tta": 8,
+  "arch": "effnet",
+  "row": 1.0,
+  "n_move": 5,
+  "gr_prefilter_ft": 0.0,
+  "std_error_spearman": 0.6218197836238644
+}

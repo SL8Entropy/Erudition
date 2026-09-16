@@ -1,0 +1,14 @@
+# 2026-09-16 14:40:28  anchor_eval.py --models runs/C_s1/model_last.pt runs/C_s2/model_last.pt runs/C_s3/model_last.pt --out runs/C_seeds_tta8 --row 1.0 --n-move 5 --tta 8 --save-std
+grid: 256 rows x 336 cols (row 1.0 ft), stem_stride 1, arch effnet, GR prefilter 0 ft
+holdout: 155 wells (first d07aed8f)
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+scored rows: 754,122
+MD phases: (np.float64(0.0), np.float64(8.0), np.float64(16.0), np.float64(24.0), np.float64(32.0), np.float64(40.0), np.float64(48.0), np.float64(56.0))
+model_last.pt: pooled RMSE 6.0270 ft  (33s)
+model_last.pt: pooled RMSE 6.5656 ft  (32s)
+model_last.pt: pooled RMSE 6.1995 ft  (32s)
+belief spread vs |error|, Spearman rho = 0.622
+
+HOLDOUT POOLED RMSE: 5.9929 ft over 754,122 rows in 155 wells (3 ckpt x 8 phase)
+per-well RMSE  mean 4.533  p50 3.442  p95 12.383
+worst 5 wells carry 34% of the squared error: {'f6d009f4': 20.218, 'e5864244': 23.531, 'fb03ae90': 15.105, 'f2d4c8c9': 14.503, 'f6bc699b': 18.401}

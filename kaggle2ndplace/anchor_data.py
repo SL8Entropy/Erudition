@@ -64,8 +64,40 @@ CACHE_VERSION = 1
 # ------------------------------------------------------------------------------ grid
 
 
+_GR_PREFILTER_FT = 0.0
+
+
+def prefilter_gr(gr: np.ndarray, md: np.ndarray, width_ft: float) -> np.ndarray:
+    """Centred, NaN-aware moving average of GR along MD, as an anti-aliasing prefilter.
+
+    The grid box-averages GR into 32 ft columns with a fixed phase, which aliases
+    everything shorter than a column; MD-phase TTA exists to average that out after the
+    fact, at 8x the inference cost.  Smoothing with a ``width_ft`` box *before* the column
+    box turns the effective column kernel into a triangle of twice the width -- the
+    textbook fix -- so a single phase should see what eight phases averaged.
+
+    Missing samples stay missing: a gap is never filled from its neighbours, so the
+    validity channel keeps meaning exactly what it meant, and the average at a valid row
+    only uses valid rows.
+    """
+    n = len(gr)
+    dmd = float(np.median(np.diff(md[:min(n, 512)]))) if n > 1 else 1.0
+    width = int(round(width_ft / (dmd or 1.0)))
+    if width <= 1 or n == 0:
+        return gr
+    valid = np.isfinite(gr)
+    csum = np.concatenate(([0.0], np.cumsum(np.where(valid, gr, 0.0), dtype=np.float64)))
+    ccnt = np.concatenate(([0], np.cumsum(valid, dtype=np.int64)))
+    lo = np.clip(np.arange(n) - width // 2, 0, n)
+    hi = np.clip(lo + width, 0, n)
+    cnt = ccnt[hi] - ccnt[lo]
+    out = np.where(cnt > 0, (csum[hi] - csum[lo]) / np.maximum(cnt, 1), np.nan)
+    out[~valid] = np.nan
+    return out.astype(gr.dtype, copy=False)
+
+
 def set_grid(row: float | None = None, colw: float | None = None,
-             h: int | None = None) -> dict:
+             h: int | None = None, gr_prefilter_ft: float | None = None) -> dict:
     """Override the grid constants in ``gr2tvt_data`` for a resolution variant.
 
     ``ROW``/``T``/``LEVELS`` and ``COLW``/``H`` are module-level constants in the
@@ -78,7 +110,13 @@ def set_grid(row: float | None = None, colw: float | None = None,
     gives 512 rows and 2 ft bins, row=1.0 gives 256 rows and 4 ft bins.  The move
     vocabulary is +-n_move bins, so it coarsens with it.  Must be called before any
     ``build_item``, and in every DataLoader worker (see ``grid_worker_init``).
+
+    ``gr_prefilter_ft`` > 0 applies ``prefilter_gr`` inside every ``build_item``, at train
+    and inference alike, since it is part of the input representation.
     """
+    global _GR_PREFILTER_FT
+    if gr_prefilter_ft is not None:
+        _GR_PREFILTER_FT = float(gr_prefilter_ft)
     if row is not None:
         gd.ROW = float(row)
         gd.T = int(2 * gd.WIN / gd.ROW)
@@ -87,7 +125,7 @@ def set_grid(row: float | None = None, colw: float | None = None,
         gd.COLW = float(colw)
     if h is not None:
         gd.H = int(h)
-    return dict(row=gd.ROW, colw=gd.COLW, h=gd.H)
+    return dict(row=gd.ROW, colw=gd.COLW, h=gd.H, gr_prefilter_ft=_GR_PREFILTER_FT)
 
 
 def grid_worker_init(grid: dict):
@@ -408,6 +446,8 @@ def build_item(w: dict, ps_col: int, with_label: bool, tvt_shift: float = 0.0,
                md_phase: float = 0.0, pre_ps_label: bool = False,
                colw_in: float | None = None) -> dict:
     """One model input, in the exact tuple layout ``gr2tvt_model.items_to_x`` expects."""
+    if _GR_PREFILTER_FT > 0:
+        w = dict(w, gr=prefilter_gr(w["gr"], w["md"], _GR_PREFILTER_FT))
     c = gd.build_compact(w, with_label=with_label, colw_in=colw_in, pre_ps_cols=ps_col,
                          pre_ps_label=pre_ps_label, tvt_shift=tvt_shift,
                          pre_ps_gr=True, z_dip=True, md_phase=md_phase)

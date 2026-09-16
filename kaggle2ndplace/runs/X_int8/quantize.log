@@ -1,0 +1,43 @@
+# 2026-09-16 15:37:45  anchor_quantize.py --model runs/C_s1/model_last.pt --out runs/X_int8 --row 1.0 --n-move 5 --tta 8 --calib-wells 64 --threads 1 4 8 --qat-epochs 25 --qat-epoch-len 618
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+holdout 155 wells, calibration 64 training wells x 2 phases, eval phases (np.float64(0.0), np.float64(8.0), np.float64(16.0), np.float64(24.0), np.float64(32.0), np.float64(40.0), np.float64(48.0), np.float64(56.0))
+static graph matches the model: max |diff| = 0.00e+00
+float32 (CPU)
+  fp32       1-phase 6.3906 ft   8-phase 5.9795 ft   (173s)
+PTQ int8, keep_float=none
+  ptq int8   1-phase 24.9806 ft   8-phase 25.0552 ft   (178s)
+QAT: 25 epochs x 103 batches on cuda, lr 5e-05, observers and BN statistics frozen from epoch 15
+  qat epoch   0/25  loss 1.2053  108s
+  qat epoch   1/25  loss 0.9963  107s
+  qat epoch   2/25  loss 0.8941  114s
+  qat epoch   3/25  loss 0.8836  109s
+  qat epoch   4/25  loss 0.8675  105s
+  qat epoch   5/25  loss 0.8666  113s
+  qat epoch   6/25  loss 0.8528  105s
+  qat epoch   7/25  loss 0.8701  121s
+  qat epoch   8/25  loss 0.8447  115s
+  qat epoch   9/25  loss 0.8372  98s
+  qat epoch  10/25  loss 0.8245  98s
+  qat epoch  11/25  loss 0.8283  98s
+  qat epoch  12/25  loss 0.8109  106s
+  qat epoch  13/25  loss 0.8081  105s
+  qat epoch  14/25  loss 0.8012  105s
+  qat epoch  15/25  loss 0.8011  102s
+  qat epoch  16/25  loss 0.7862  106s
+  qat epoch  17/25  loss 0.7949  120s
+  qat epoch  18/25  loss 0.7816  133s
+  qat epoch  19/25  loss 0.7820  133s
+  qat epoch  20/25  loss 0.7845  124s
+  qat epoch  21/25  loss 0.7776  133s
+  qat epoch  22/25  loss 0.7800  318s
+  qat epoch  23/25  loss 0.7743  1463s
+  qat epoch  24/25  loss 0.7745  93s
+  qat int8   1-phase 11.4976 ft   8-phase 10.7946 ft   (146s)
+CPU latency per well (batch 1, one phase, network only)
+   1 threads: fp32   150.6 ms   int8 (qat)   238.4 ms   -> 0.63x
+   4 threads: fp32    79.6 ms   int8 (qat)   105.4 ms   -> 0.76x
+   8 threads: fp32    84.0 ms   int8 (qat)   113.2 ms   -> 0.74x
+
+fp32  5.9795 ft  (1-phase 6.3906)  15.3 MB
+ptq   25.0552 ft  (1-phase 24.9806)  4.8 MB
+qat   10.7946 ft  (1-phase 11.4976)  4.8 MB
