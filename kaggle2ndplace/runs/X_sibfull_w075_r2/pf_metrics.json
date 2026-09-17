@@ -1,0 +1,31 @@
+{
+  "pooled_rmse": 11.95029701498257,
+  "n_wells": 155,
+  "n_rows": 754122,
+  "well_rmse_mean": 9.619015485914511,
+  "well_rmse_p50": 7.629679764339642,
+  "well_rmse_p95": 23.6992344021642,
+  "sse_share_top5": 0.2571268678732677,
+  "worst_wells": {
+    "f5859199": 37.985,
+    "f6d009f4": 29.58,
+    "e45a2a62": 31.417,
+    "eeda36f5": 30.635,
+    "fc03f21f": 28.923
+  },
+  "failed_wells": [],
+  "std_error_spearman": 0.40511580288348004,
+  "profiles": 3,
+  "tuning": {
+    "train_rmse": 14.086973691963461,
+    "obs_temp_mult": 1.0,
+    "rate_std_mult": 9.0,
+    "grid": [
+      [
+        14.086973691963461,
+        1.0,
+        9.0
+      ]
+    ]
+  }
+}

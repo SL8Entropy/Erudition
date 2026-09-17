@@ -1,0 +1,18 @@
+# 2026-09-17 07:48:15  anchor_pf.py --out runs/X_sibfull_w0_r2 --profiles 3 --tune 120 --tune-temps 1.0 --tune-rates 9 --dip-correct 500 --sibling-w 0 --force
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+holdout 155 wells, 754,122 rows; 3 particle-filter profile(s), no training involved
+tuning on 120 training wells (the holdout is not touched)
+   temp x1    rate x9    N=512   jump=0.004  ess=0.5  ->  16.357 ft
+   chosen: obs_temp x1, rate_std x9  (16.357 ft on train)
+dip corrector: neighbour pool 618 training wells, fitting on 500
+   offset a [ft]    in-sample R2 0.258   mean -0.70623
+   slope b [ft/ft]  in-sample R2 0.310   mean -0.00258
+   strongest features for the slope: dz_mean (-0.0122), pf_slope (+0.0042), r0 (+0.0032), r_nbr (+0.0032)
+  50/155 wells (2s)
+  100/155 wells (5s)
+  150/155 wells (7s)
+filtered 155 wells in 8s
+
+PARTICLE FILTER POOLED RMSE: 12.6520 ft over 754,122 rows in 155 wells
+per-well RMSE  mean 10.298  p50 7.931  p95 24.068
+spread vs |error|, Spearman rho = 0.406

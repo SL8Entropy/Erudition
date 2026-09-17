@@ -1,0 +1,55 @@
+{
+  "convnext": {
+    "pooled_rmse": 4.937421143166846,
+    "well_rmse_p50": 2.83472510713609,
+    "well_rmse_mean": 3.8084657103721726,
+    "well_rmse_p95": 9.72717880904318
+  },
+  "anchor": {
+    "pooled_rmse": 6.024079175206055,
+    "well_rmse_p50": 3.592919670686017,
+    "well_rmse_mean": 4.492966090282412,
+    "well_rmse_p95": 11.095853264310254
+  },
+  "mean": {
+    "pooled_rmse": 5.010448868598394,
+    "well_rmse_p50": 3.0378317422882266,
+    "well_rmse_mean": 3.873702318054261,
+    "well_rmse_p95": 9.567200376525914
+  },
+  "global_w": {
+    "pooled_rmse": 4.870279990725486,
+    "well_rmse_p50": 2.8448071459831286,
+    "well_rmse_mean": 3.7562258796874555,
+    "well_rmse_p95": 9.234740276949926
+  },
+  "oracle_row": {
+    "pooled_rmse": 4.002988144212046,
+    "well_rmse_p50": 2.0819754685029372,
+    "well_rmse_mean": 2.9626335929276357,
+    "well_rmse_p95": 7.634607158829168
+  },
+  "gate": {
+    "pooled_rmse": 5.178531437125292,
+    "well_rmse_p50": 2.747353902715839,
+    "well_rmse_mean": 3.833168026522937,
+    "well_rmse_p95": 9.334361885791003,
+    "mean_weight_anchor": 0.2005104196088195,
+    "decisiveness": 0.6247940854180669
+  },
+  "global_w_per_fold": {
+    "0": 0.1613323094320234,
+    "1": 0.24294762147246116,
+    "2": 0.21654319631633295,
+    "3": 0.18809700490563677,
+    "4": 0.27857776955562413
+  },
+  "inputs": {
+    "anchor": "runs/C_s1/holdout_predictions.pqt",
+    "convnext": "../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt",
+    "folds": 5,
+    "gate_seeds": 3,
+    "seed": 0,
+    "gate_ce_w": 0.0
+  }
+}

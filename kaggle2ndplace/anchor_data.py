@@ -57,8 +57,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 import gr2tvt_data as gd  # noqa: E402
 
 NULLS = ["nan", "NaN", "NA", ""]
-HW_COLS = ["MD", "Z", "TVT", "GR", "TVT_input"]
-CACHE_VERSION = 1
+HW_COLS = ["MD", "X", "Y", "Z", "TVT", "GR", "TVT_input"]   # X/Y feed neighbour features
+CACHE_VERSION = 2
 
 
 # ------------------------------------------------------------------------------ grid
@@ -157,8 +157,8 @@ def _read_well(data_dir: Path, name: str) -> dict[str, np.ndarray]:
     twt, twg = twt[m], twg[m]
     o = np.argsort(twt, kind="stable")
     get = lambda c: hw[c].cast(pl.Float64).to_numpy().astype(np.float32)  # noqa: E731
-    return dict(md=get("MD"), z=get("Z"), tvt=get("TVT"), gr=get("GR"),
-                tvt_input=get("TVT_input"),
+    return dict(md=get("MD"), x=get("X"), y=get("Y"), z=get("Z"), tvt=get("TVT"),
+                gr=get("GR"), tvt_input=get("TVT_input"),
                 tw_tvt=twt[o].astype(np.float32), tw_gr=twg[o].astype(np.float32))
 
 
@@ -195,8 +195,9 @@ def load_wells(data_dir: Path, names: list[str], cache: Path | None = None,
             for i, n in enumerate(names):
                 a, b = int(hw_off[i]), int(hw_off[i + 1])
                 c, d = int(tw_off[i]), int(tw_off[i + 1])
-                out[n] = dict(md=hw[0, a:b], z=hw[1, a:b], tvt=hw[2, a:b], gr=hw[3, a:b],
-                              tvt_input=hw[4, a:b], tw_tvt=tw[0, c:d], tw_gr=tw[1, c:d])
+                out[n] = dict(md=hw[0, a:b], x=hw[1, a:b], y=hw[2, a:b], z=hw[3, a:b],
+                              tvt=hw[4, a:b], gr=hw[5, a:b], tvt_input=hw[6, a:b],
+                              tw_tvt=tw[0, c:d], tw_gr=tw[1, c:d])
             return out
         log(f"wells: cache at {cache} does not match this well list, rebuilding")
 
@@ -211,7 +212,7 @@ def load_wells(data_dir: Path, names: list[str], cache: Path | None = None,
         hw_off = np.cumsum([0] + [len(out[n]["md"]) for n in names]).astype(np.int64)
         tw_off = np.cumsum([0] + [len(out[n]["tw_tvt"]) for n in names]).astype(np.int64)
         hw = np.stack([np.concatenate([out[n][k] for n in names])
-                       for k in ("md", "z", "tvt", "gr", "tvt_input")])
+                       for k in ("md", "x", "y", "z", "tvt", "gr", "tvt_input")])
         tw = np.stack([np.concatenate([out[n][k] for n in names]) for k in ("tw_tvt", "tw_gr")])
         np.savez(cache, version=CACHE_VERSION, names=np.array(names), hw=hw, tw=tw,
                  hw_off=hw_off, tw_off=tw_off)

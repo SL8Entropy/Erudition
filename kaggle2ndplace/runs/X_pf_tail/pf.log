@@ -1,0 +1,26 @@
+# 2026-09-16 18:12:40  anchor_pf.py --out runs/X_pf_tail --profiles 3 --tune 60 --tune-temps 1.0 --tune-rates 9 --tune-particles 512 4096 --tune-jump 0.004 0.03 --tune-ess 0.5 0.2 --calibrate 150 --compare ../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt --force
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+holdout 155 wells, 754,122 rows; 3 particle-filter profile(s), no training involved
+tuning on 60 training wells (the holdout is not touched)
+   temp x1    rate x9    N=512   jump=0.004  ess=0.5  ->  16.705 ft
+   temp x1    rate x9    N=512   jump=0.004  ess=0.2  ->  17.192 ft
+   temp x1    rate x9    N=512   jump=0.03   ess=0.5  ->  16.545 ft
+   temp x1    rate x9    N=512   jump=0.03   ess=0.2  ->  17.120 ft
+   temp x1    rate x9    N=4096  jump=0.004  ess=0.5  ->  16.728 ft
+   temp x1    rate x9    N=4096  jump=0.004  ess=0.2  ->  16.814 ft
+   temp x1    rate x9    N=4096  jump=0.03   ess=0.5  ->  17.288 ft
+   temp x1    rate x9    N=4096  jump=0.03   ess=0.2  ->  17.250 ft
+   chosen: obs_temp x1, rate_std x9  (16.545 ft on train)
+drift correction fitted on 150 training wells: err = -1.896 ft -0.00255 x (MD - MD_PS)  [-12.8 ft over a 5000 ft lateral]
+  50/155 wells (3s)
+  100/155 wells (5s)
+  150/155 wells (8s)
+filtered 155 wells in 9s
+
+PARTICLE FILTER POOLED RMSE: 16.1360 ft over 754,122 rows in 155 wells
+per-well RMSE  mean 12.967  p50 10.849  p95 30.844
+spread vs |error|, Spearman rho = 0.423
+
+against rb_v3_tta_ep150: it 4.9374 ft, PF 16.1360 ft
+  residual correlation 0.259  (AnchorCNN manages 0.669; below ~0.5 is the prize)
+  best blend: 0.016 PF -> 4.9311 ft  (-0.0064 ft)

@@ -1,0 +1,28 @@
+{
+  "pooled_rmse": 28.976954308700304,
+  "n_wells": 155,
+  "n_rows": 754122,
+  "well_rmse_mean": 19.802062883393177,
+  "well_rmse_p50": 11.872783347250424,
+  "well_rmse_p95": 59.523769224601395,
+  "sse_share_top5": 0.39417817201293937,
+  "worst_wells": {
+    "fb03ae90": 116.511,
+    "fbd68d27": 87.078,
+    "f6d009f4": 79.129,
+    "e45a2a62": 89.009,
+    "ee288beb": 78.803
+  },
+  "failed_wells": [],
+  "std_error_spearman": 0.565687587108016,
+  "profiles": 3,
+  "compare": {
+    "other": "..\\kaggle_1st_place\\solution\\results\\rb_v3_tta_ep150\\holdout_predictions.pqt",
+    "other_rmse": 4.937421143166846,
+    "pf_rmse": 28.976954308700304,
+    "residual_corr": 0.2010529900075026,
+    "best_weight_pf": 0.0,
+    "blend_rmse": 4.937421143166846,
+    "blend_gain": 0.0
+  }
+}

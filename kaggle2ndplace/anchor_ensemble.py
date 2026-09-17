@@ -166,7 +166,21 @@ def fit_gate(seqs, train_names, val_names, device, seed, ce_w=0.0, epochs=400, p
     stack = np.concatenate([seqs[n]["X"] for n in train_names])
     mu, sd = stack.mean(0), stack.std(0) + 1e-6
     gate = Gate(len(FEATS)).to(device)
-    opt = torch.optim.Adam(gate.parameters(), lr=3e-3, weight_decay=1e-4)
+
+    # Start at the fitted constant weight, not at 0.5, and keep weight decay off the
+    # output bias.  Initialised at 0.5 and decayed toward it, the first version of this
+    # gate simply stayed there: it scored 5.017 against 4.905 for a single fitted weight,
+    # even though that constant is inside its hypothesis space.  Starting from the
+    # constant means the gate can only add per-row structure on top of it.
+    a = np.concatenate([seqs[n]["p_a"] for n in train_names])
+    c = np.concatenate([seqs[n]["p_c"] for n in train_names])
+    y = np.concatenate([seqs[n]["y"] for n in train_names])
+    w0 = float(np.clip(((y - c) * (a - c)).sum() / max(((a - c) ** 2).sum(), 1e-9), 0.02, 0.98))
+    with torch.no_grad():
+        gate.head.bias.fill_(float(np.log(w0 / (1 - w0))))
+    decayed = [p for n, p in gate.named_parameters() if n != "head.bias"]
+    opt = torch.optim.Adam([{"params": decayed, "weight_decay": 1e-4},
+                            {"params": [gate.head.bias], "weight_decay": 0.0}], lr=3e-3)
     tr = _batch(seqs, train_names, mu, sd, device)
     va = _batch(seqs, val_names, mu, sd, device)
 

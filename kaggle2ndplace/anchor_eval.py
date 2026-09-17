@@ -62,8 +62,13 @@ def parse_args(argv=None):
                    help="must match the checkpoint's training config")
     p.add_argument("--row", type=float, default=0.5,
                    help="must match the checkpoint's training config")
+    p.add_argument("--convnext-stem-stride", type=int, default=2,
+                   help="must match the checkpoint's training config")
     p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
                    help="must match the checkpoint's training config")
+    p.add_argument("--sibling-w", type=float, default=0.0,
+                   help="sibling-lateral reference blend weight; must match the training run")
+    p.add_argument("--sibling-bin", type=float, default=1.0)
     p.add_argument("--gr-prefilter-ft", type=float, default=0.0,
                    help="must match the checkpoint's training config")
     p.add_argument("--save-std", action="store_true",
@@ -97,6 +102,9 @@ def main(args):
     tr_names, ho_names = split_wells(names, args.train_frac)
     log(f"holdout: {len(ho_names)} wells (first {ho_names[0]})")
     wells = load_wells(Path(args.data), names, Path(args.cache) if args.cache else None, log=log)
+    if args.sibling_w > 0:
+        from anchor_sibling import apply_to_wells
+        apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
     ho_wells = {n: wells[n] for n in ho_names}
     log(f"scored rows: {sum(len(eval_rows(w)) for w in ho_wells.values()):,}")
 

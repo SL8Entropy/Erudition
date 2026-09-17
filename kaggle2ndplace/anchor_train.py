@@ -35,6 +35,7 @@ import argparse
 import copy
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -143,8 +144,18 @@ def build_model(args, device, log=print):
                                    dzl_head=args.dzl_w > 0)
         return model.to(device)
 
+    from anchor_convnext import cached_weights, is_convnext, retrofit_stem
+    cnx = is_convnext(args.backbone)
+    cnx_file = cached_weights(args.backbone) if (cnx and args.pretrained) else None
+    if cnx and args.pretrained and cnx_file is None:
+        log(f"no cached weights for {args.backbone}; the hub is unreachable here, so the "
+            f"trunk will be randomly initialised")
+
     kw = dict(backbone=args.backbone, in_chans=9, d=64, n_blocks=2,
-              stem_stride=args.stem_stride, fuse_div=args.fuse_div, ps_col=args.ps_col,
+              # make_trunk only allows stem_stride != 2 for EfficientNet; for ConvNeXt the
+              # stem is retrofitted after construction instead (see anchor_convnext.py).
+              stem_stride=2 if cnx else args.stem_stride,
+              fuse_div=args.fuse_div, ps_col=args.ps_col,
               anchor_m=gd.H + args.ps_col, n_move=args.n_move,
               win=args.win, row=gd.ROW,
               ps_gr=True, z_dip=True, drop_path=args.drop_path,
@@ -161,6 +172,8 @@ def build_model(args, device, log=print):
         # would when loading the same checkpoint from the hub.
         if weights is not None and name == args.backbone and kwargs.get("pretrained"):
             kwargs.setdefault("pretrained_cfg_overlay", dict(file=str(weights)))
+        if cnx_file is not None and name == args.backbone and kwargs.get("pretrained"):
+            kwargs.setdefault("pretrained_cfg_overlay", dict(file=str(cnx_file)))
         return real_create(name, **kwargs)
 
     timm.create_model = create
@@ -174,6 +187,8 @@ def build_model(args, device, log=print):
         model = GR2TVTAnchorNet(**dict(kw, pretrained=False))
     finally:
         timm.create_model = real_create
+    if cnx:
+        retrofit_stem(model, in_chans=9, stride=args.convnext_stem_stride, log=log)
     return model.to(device).to(memory_format=torch.channels_last)
 
 
@@ -377,6 +392,9 @@ def train(args):
 
     cache = Path(args.cache) if args.cache else None
     wells = load_wells(Path(args.data), names, cache, log=log)
+    if args.sibling_w > 0:
+        from anchor_sibling import apply_to_wells
+        apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
     tr_wells = {n: wells[n] for n in tr_names}
     ho_wells = {n: wells[n] for n in ho_names}
     log(f"scored rows in holdout: {sum(len(eval_rows(w)) for w in ho_wells.values()):,}")
@@ -599,9 +617,20 @@ def parse_args(argv=None):
                    help="vertical grid sampling in ft; also sets the output bin size "
                         "(0.5 -> 512 rows / 2 ft bins, 1.0 -> 256 rows / 4 ft bins)")
     # cost experiments.  Every default reproduces the runs already in runs/.
+    p.add_argument("--convnext-stem-stride", type=int, default=2,
+                   help="replacement stem stride for a ConvNeXt backbone. 2 reproduces the "
+                        "EfficientNet baseline's feature-map geometry (2:1 against the output "
+                        "grid); ConvNeXt's own stride-4 patchify would give 1:1, which failed "
+                        "in the resolution ablation")
     p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
                    help="effnet = the released EfficientNet-B0 trunk; separable = 1-D "
                         "encoders + matching volume (anchor_separable.py)")
+    p.add_argument("--sibling-w", type=float, default=0.0,
+                   help="blend the typewell channel with a sibling-lateral reference GR at this "
+                        "weight (0 = typewell only, the default).  Siblings are TRAINING wells "
+                        "sharing a master typewell system; a well is never its own sibling.")
+    p.add_argument("--sibling-bin", type=float, default=1.0,
+                   help="depth bin for the sibling GR profile, feet")
     p.add_argument("--gr-prefilter-ft", type=float, default=0.0,
                    help="anti-aliasing moving average on GR before column binning; "
                         "32 matches the column width. 0 = off")

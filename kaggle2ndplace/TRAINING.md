@@ -477,6 +477,233 @@ says per-row selection *could* pay, but nothing tried here captures any of it.
 better than all three 2x-budget seeds. One seed against three is not proof, but there is no
 evidence for "train on more material", which had been a recommendation.
 
+## Swapping the backbone: a ConvNeXt trunk in the AnchorCNN
+
+There is a ~1 ft gap between this AnchorCNN (~6.0) and the 1st-place ConvNeXt (4.94) on
+identical wells, and four things could explain it: the backbone, their extra geo-prior
+input channels, their longer tuned recipe, or their output formulation. `--backbone
+convnext_small` isolates the first one — everything else stays Bilzard's.
+
+**The stem has to be retrofitted or the comparison is rigged.** ConvNeXt starts with a 4x4
+stride-4 patchify conv, which puts its finest feature map at input/4 — exactly the output
+grid, a 1:1 ratio. Both 1:1 configurations in the resolution ablation failed (+0.9 and
++1.7 ft), so a stock ConvNeXt would lose here for reasons unrelated to ConvNeXt.
+`anchor_convnext.retrofit_stem` replaces it with a 3x3 stride-2 conv, which reproduces the
+EfficientNet baseline's geometry exactly (measured):
+
+| trunk | feature rows | cols | output bins | ratio |
+|---|---|---|---:|---:|
+| EfficientNet-B0, `stem_stride=1` | [128, 64, 32, 16] | [168, 84, 42, 21] | 64 | 2.0x |
+| ConvNeXt-small, retrofitted | [128, 64, 32, 16] | [168, 84, 42, 21] | 64 | 2.0x |
+| ConvNeXt-small, stock (`--convnext-stem-stride 4`) | [64, 32, 16, 8] | — | 64 | 1.0x |
+
+The 1st-place pipeline solves the same problem the same way: its notes record that the
+patchify stem is skipped and a 1x1 conv feeds stage 0.
+
+Pretrained weights come from the local HuggingFace cache. `HF_HUB_OFFLINE` is read at
+import time so setting it from inside the process is too late; `cached_weights()` finds the
+snapshot and hands the file to timm directly, the same route the EfficientNet weights take.
+The replacement stem is randomly initialised, so the ConvNeXt keeps its pretrained stages
+but loses its pretrained stem — state that with any result.
+
+**It is not a compute-matched comparison.** Measured on this GPU:
+
+| trunk | params | GFLOP/fwd | ms/sample | peak VRAM (batch 4 / 6) | 150 epochs |
+|---|---:|---:|---:|---:|---:|
+| EfficientNet-B0 | 3.7M | 7.8 | 24 | 1.3 / 1.9 GiB | ~70 min |
+| ConvNeXt-small | 49.7M | **122.1** | 69–73 | 2.9 / 4.6 GiB | **~3.5 h** |
+
+15.6x the compute per sample, because a stride-2 stem quadruples every stage's resolution
+relative to what ConvNeXt was designed for. Use `--batch-size 4 --grad-accum 3` (effective
+batch 12, same as the default 6x2): batch 6 peaks at 4.6 GiB, past the ~4 GiB point where
+this card's throughput collapses.
+
+### Commands
+
+The control first, so a usable comparison exists after ~70 minutes rather than 4.5 hours:
+
+```bash
+python -u anchor_train.py --out runs/C_s1_ep150 --row 1.0 --n-move 5 --epoch-len 1150 --epochs 150 --eval-every 5 --tta 8 --seed 1 && python -u anchor_train.py --out runs/X_convnext --backbone convnext_small --convnext-stem-stride 2 --row 1.0 --n-move 5 --epoch-len 1150 --epochs 150 --eval-every 5 --tta 8 --seed 1 --batch-size 4 --grad-accum 3
+```
+
+Then:
+
+```bash
+python ../kaggle_1st_place/solution/seq_NN_robust_compare.py --base runs/C_s1_ep150 --treat runs/X_convnext --output-dir runs/X_convnext
+```
+
+Rescoring a ConvNeXt checkpoint must repeat `--backbone convnext_small
+--convnext-stem-stride 2`, or the rebuilt architecture will not match the weights.
+
+## Ensemble partners: what the correlation screen found
+
+Blend gain is governed by how *decorrelated* a partner is, not how accurate. Screening
+every prediction set already scored on these 155 wells (`anchor_pf.py --compare` prints
+this for any new one):
+
+| partner | RMSE | residual corr | best blend | gain |
+|---|---:|---:|---:|---:|
+| AnchorCNN `C_s1` | 6.02 | **0.669** | 4.838 | −0.099 |
+| eight 1st-place variants | 4.98–5.52 | 0.84–0.97 | 4.85–4.92 | −0.02…−0.09 |
+| their non-ML geo prior | 11.57 | 0.510 | 4.937 | 0.000 |
+| **particle filter** (`anchor_pf.py`) | 28.98 | **0.201** | 4.937 | 0.000 |
+
+Two things follow. Our AnchorCNN is the *best partner that exists* for that ConvNeXt —
+more decorrelated than any of the 1st place's own variants, because it is a genuinely
+different formulation. And a physics tracker decorrelates far further (0.20), which is
+exactly the hypothesis: architecture diversity buys ρ≈0.7, method diversity buys ρ≈0.2.
+
+**The prize, if a competitive tracker existed.** At ρ=0.20:
+
+| tracker accuracy | blend | gain |
+|---|---:|---:|
+| 6 ft (3rd place's HMM was 5.97) | 4.166 | **−0.77** |
+| 8 ft | 4.542 | **−0.40** |
+| 12 ft | 4.826 | −0.11 |
+| 29 ft (what we have) | 4.935 | −0.003 |
+
+That is 4–25x everything extracted from ensembling so far, and it is the strongest
+argument for building an HMM next.
+
+**But this particular filter is far too weak.** 28.98 ft, worse than predicting a flat
+line (9.8 ft). The failure is drift, cleanly: mean |error| grows 4.3 → 10.9 → 17.2 → 23.4
+→ 29.7 ft across the five fifths of the lateral. It tracks well and then loses the thread.
+Tuning its likelihood weight and drift rate on 80 *training* wells (leak-free — the filter
+fits nothing) moved it only to 26.7, and a 100x sweep of the likelihood weight changed
+nothing, so it is not a tuning problem.
+
+It is also not an integration problem: the `Well` built by `to_champion_well` is
+byte-identical to `rogii_champion`'s own loader on every field. The filter was written to
+generate a *channel* for a CNN, not to predict alone, and its own docstring says so.
+
+### Fixing the particle filter: 28.98 -> 16.82 ft
+
+The drift had one cause, and it is measurable rather than a matter of taste. On 200
+training wells the structural slope over the eval zone spans [-0.041, +0.046], and the
+prefix-tail estimate of it is wrong by 0.021 at p90 — worth 103 ft of drift at p90 if it
+is never corrected. The filter's slope random walk can wander about 0.006 over a whole
+lateral, so no particle ever carries the right slope.
+
+The first tuning grid swept the slope walk *downward* (x0.25, x1) and the likelihood
+weight up to x100, and nothing helped, because neither is the mechanism. Sweeping the
+slope walk **upward** does:
+
+| rate_std multiplier | x1 | x4 | x6 | **x9** | x12 | x18 | x64 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| RMSE on training wells | 36.4 | 17.4 | 15.7 | **15.3** | 17.2 | 22.4 | 81.1 |
+
+Holdout: **28.98 -> 16.82 ft**, an interior optimum at x9 (`--tune-rates`).
+
+**And it still contributes nothing.** A partner only helps when its RMSE is below
+`sigma_convnext / rho` — below that line the blend weight goes negative and is clipped to
+zero. The catch is that the threshold moves as the tracker improves, because a tracker
+that follows the GR better also agrees with the CNN more:
+
+| PF version | RMSE | corr | break-even | blend weight |
+|---|---:|---:|---:|---:|
+| as shipped | 28.98 | 0.201 | 24.6 ft | 0.000 |
+| slope walk x4 | 18.67 | 0.276 | 17.9 ft | 0.000 |
+| slope walk x9 | **16.82** | 0.296 | 16.7 ft | 0.005 (-0.0006 ft) |
+
+It closed from 4.4 ft above break-even to 0.14 ft above, and sits exactly on the line. At
+rho ~ 0.30 the prize is smaller than the rho = 0.20 table suggested: a tracker at 10 ft is
+worth -0.10 ft, at 8 ft -0.25 ft, at 6 ft -0.61 ft. **A tracker has to reach about 8 ft to
+be worth anything**, which is where 3rd place's HMM (5.97) sat.
+
+`anchor_hmm.py` is built and runs (0.11 s/well, exact forward-backward over 129 levels x
+53 slopes, prefix clamped) but is not competitive yet: ~23 ft at its best setting so far,
+worse than the repaired particle filter. Its slope grid is already wide enough by
+construction, so its problem is elsewhere; lower likelihood weights help, which is where
+tuning should start.
+
+### Attacking the tail: a systematic bias, not mode collapse
+
+Before correcting anything, the error was one-directional and growing — quarter by quarter
+across the lateral: **-1.69, -6.11, -8.54, -9.62 ft**, negative in 72% of wells, mean
+-6.49. The twenty worst wells had |mean error| / RMSE = 0.87 with *zero* sign flips, i.e.
+they were not wandering, they were leaning. The filter under-estimates the structural
+slope in a consistent direction, so every well drifts the same way and the tail wells are
+simply where it compounds longest.
+
+Two parameters fitted on training wells (`--calibrate`) remove it: `err = -1.01 ft
+-0.00260 x (MD - MD_PS)`, a slope bias worth **-13 ft over a 5000 ft lateral**.
+
+| stage | RMSE | corr | blend weight |
+|---|---:|---:|---:|
+| as shipped | 28.98 | 0.201 | 0.000 |
+| slope random walk x9 | 16.82 | 0.296 | 0.005 |
+| **+ drift calibration** | **15.84** | 0.266 | 0.016 (-0.006 ft) |
+
+**Mode collapse is ruled out.** Sweeping the knobs that would fix a degenerate particle
+cloud — 512 vs 4096 particles, jump probability 0.004 vs 0.03, resampling threshold 0.5 vs
+0.2 — moves nothing: all eight configurations land between 16.5 and 17.3 ft, and eight
+times the particles changes the answer by 0.02 ft. So the remaining tail is not a sampling
+artefact; the posterior genuinely prefers the wrong layer on those wells, which is a
+statement about the *evidence*, not the inference.
+
+That points at the reference profile, and it is the same conclusion 3rd place reached from
+the other direction when they called reference-GR choice their biggest lever. A tracker's
+only evidence is GR against the reference, so a well whose typewell does not represent it
+has nothing to lock onto. **Sibling-lateral reference GR is the next thing to build**, and
+it would help the AnchorCNN and the tracker for the same reason.
+
+### Per-well dip correction (`anchor_dip.py`)
+
+The 8th-place team's error decomposition -- "the error is per-well dip lock-in, not tail
+difficulty" -- reproduces on every model here, theirs included:
+
+| | baseline | − per-well offset | − per-well linear trend |
+|---|---:|---:|---:|
+| ConvNeXt (1st place) | 4.937 | 3.761 | **3.072** |
+| AnchorCNN | 6.024 | 4.148 | **3.269** |
+| particle filter | 15.845 | 9.491 | **5.478** |
+| *8th place U-Net* | *6.44* | *4.58* | *3.33* |
+
+One wrong line per well is worth **1.9 ft even on the best model available**, which is
+sixty times anything ensembling has produced. The filter is the extreme case: its shape is
+fine and nearly all its error is a single wrong dip.
+
+A global two-parameter calibration only removes the population average of that.
+`anchor_dip.py` predicts each well's own line -- two ridge regressions for the error's
+offset and slope, from twelve features available at inference (prefix slope, the filter's
+own implied slope, neighbouring *training* wells' structural slopes, trajectory slope, GR
+coverage, filter spread). A training well is never its own neighbour.
+
+This is only possible for the filter because it needs no training, so it can be run over
+all 618 training wells and the corrector fitted there with the holdout untouched. The CNNs
+would need out-of-fold predictions, which we do not have.
+
+| stage | RMSE | median well | corr | blend weight | blend gain |
+|---|---:|---:|---:|---:|---:|
+| as shipped | 28.98 | — | 0.201 | 0.000 | 0.000 |
+| slope random walk x9 | 16.82 | 10.05 | 0.296 | 0.005 | −0.001 |
+| + global drift calibration | 15.84 | 8.97 | 0.266 | 0.016 | −0.006 |
+| **+ per-well dip corrector** | **13.07** | **7.68** | 0.308 | 0.030 | **−0.014** |
+
+**28.98 → 13.07 ft, a 55% cut**, median well 7.68. The prediction that neighbouring wells'
+dip would be the dominant feature was wrong: the strongest predictor of the error slope is
+`dz_mean`, the well's *own* trajectory slope, with the neighbour slope fourth. Since
+dTVT = dz_layer − dz, the filter is mishandling the part of the motion that is already
+known exactly.
+
+Still only −0.014 ft on the blend, because the bar is set by a 4.937 ft partner. Reaching
+10 ft would be worth ≈ −0.10, and 8 ft ≈ −0.25. The median well is already 7.7 ft; the
+pooled figure is held up by the tail (p95 26.8).
+
+## The gate, with its initialisation bug fixed
+
+The first gate was pinned at w=0.5 by its initialisation and by weight decay on the output
+bias, so it reproduced the plain mean. Fixed — it now starts at the fitted constant weight
+and the bias is exempt from decay — it moves decisively (decisiveness 0.63, mean w 0.20)
+and gets the **best median well of any method, 2.747** against 2.835 for the ConvNeXt
+alone. But pooled it is **5.178** against 4.870 for a single constant weight.
+
+So per-row gating genuinely helps typical wells and hurts catastrophic ones, where it
+picks confidently and wrongly. With the confound removed the conclusion is firmer than
+before: **a single fitted weight beats a learned per-row gate here.** Using one AnchorCNN
+seed rather than the 3-seed average also blends better (4.870 vs 4.905) at a third of the
+inference, because seed-averaging removes the idiosyncrasy that made the partner useful.
+
 ### Reading the results
 
 One table for everything, with the control seeds' mean and spread:
@@ -638,3 +865,151 @@ quadruples it at ~2.5 min/epoch).
 `--eval-every` scores the EMA weights so the curve is readable during the run. The final
 number scores the **last** epoch by default; `--score-best` scores the best-by-holdout
 checkpoint instead, which is selection on the test set and should be reported as such.
+
+## The sibling-lateral reference GR
+
+Every model here works the same way underneath: slide the lateral's gamma ray against a
+**reference profile** of what GR reads at each depth, until the patterns line up.  Every
+model has used the same reference -- the supplied typewell -- and the typewell has two
+problems.  It is a different, lower-resolution tool than the one in the lateral (the
+competition host said so outright), and it may simply not describe the rock this well is
+actually in.  That second failure is the catastrophic-well signature.
+
+3rd place replaced it.  They called the choice of reference GR their single biggest lever
+on the private leaderboard and weighted typewell against an alternative 0.2 / 0.8.  This is
+that idea, rebuilt here.
+
+### Master typewell systems
+
+The 773 typewells are not 773 logs.  Interpolating them all onto a common 1 ft depth grid
+and correlating every pair over the depths they share (one matmul, 0.2 s) then joining pairs
+with >= 100 ft of overlap and correlation >= 0.9 gives:
+
+    54 systems over 773 wells, members median 8, max 55, 12 singletons
+
+Members of a system agree to 0.000 GR where they overlap -- they are one log, cropped
+differently.  Wells sharing a system are drilling the same rock, so call them **siblings**.
+153 of the 155 holdout wells have at least one sibling among the training wells; the median
+has 21.
+
+### Siblings as a reference
+
+For a sibling that is a *training* well the true TVT is known at every row, so its own
+**lateral** GR can be binned by depth into a profile -- measured by a horizontal tool, at
+lateral resolution, in the right rock.  Accumulating counts across siblings so a depth
+logged by many wells outweighs one logged by a single well gives a depth -> GR curve that
+can be sampled anywhere the typewell is sampled.
+
+How well does it describe a holdout well's actual lateral GR?  Median RMS over 153 wells:
+
+    typewell                       10.78 API
+    sibling profile                10.49          beats typewell on 58% of wells
+    0.5 typewell + 0.5 sibling     10.18          beats typewell on 77% of wells
+    0.2 typewell + 0.8 sibling     10.44
+
+Two things that seemed obviously right and were not:
+
+  * **Standardising each sibling's GR** before averaging (median/IQR, to remove tool
+    calibration differences) makes it *much* worse -- 17.11 vs 10.49 -- because the
+    typewell's robust statistics are taken over its full ~900 ft span while the lateral
+    lives in a narrow TVT window, so the rescale maps onto the wrong range.
+  * **Affine-calibrating the sibling profile on the known prefix**, the inference-legal
+    analogue of `calibrate_typewell`, is a wash (10.80 vs 10.49).  The scales already agree;
+    fitting two more parameters only adds variance.
+
+Coarser bins are worse (2 ft -> 11.67, 5 ft -> 13.14), which is not smoothing noise away:
+the lateral's TVT range is narrow, so a 5 ft bin leaves only a handful of samples across it.
+1 ft is the setting.
+
+### Where it plugs in
+
+`anchor_sibling.apply_to_wells` overwrites each well's `tw_gr` in place after loading, so
+`gr2tvt_data.build_compact` fills the typewell channel from the blend.  Nothing in `src/`
+changes, the input stays 9 channels, checkpoints stay compatible, and flip augmentation
+reverses the blended array alongside `tw_tvt` exactly as it did before.  The particle filter
+gets the same treatment through `anchor_pf.sibling_reference`, which means tuning, dip
+fitting and prediction all see one consistent reference without any of them knowing about it.
+
+Leakage is asserted, not assumed:
+
+    [ok] bank holds 618 laterals, all from the 618 training wells
+    [ok] no well is its own sibling (checked all 773)
+    [ok] uncovered depths untouched (482 of 2175 on d07aed8f)
+    [ok] at weight 1.0 covered depths equal the sibling profile exactly
+
+Depths no sibling logged keep the original typewell, so the blend never removes information.
+
+### The blend weight, chosen on training wells
+
+Swept over 120 training wells with the filter, holdout untouched:
+
+    sibling-w   pooled ft   mean well   p50 well
+      0.00        18.80       13.91       10.01
+      0.25        18.17       13.05        8.70
+      0.50        18.18       12.82        8.76
+      0.75        15.72       11.49        7.96
+      1.00        15.87       11.79        9.33
+
+Pooled improves with weight; the *median* well is best around 0.25.  Siblings help the
+wells that are badly wrong and cost a little on the wells that were already fine, which is
+what a better-matched reference should do.  Pooled RMSE is the competition metric, so
+**0.75** is the setting -- best pooled in this sweep and better median than 1.00.
+
+The filter resamples stochastically and is not seeded, so repeat runs of the same config
+differ; the w = 0 arm reproduces to 0.05 ft but the sibling arms move by over a foot between
+repeats, because a better reference moves marginal wells onto a decision boundary where the
+resampling can flip them.  Every number involving the filter below is therefore reported
+with two repeats.
+
+### Result on the particle filter
+
+The filter is the right thing to test first: it needs no training, so a reference change is
+measurable in minutes rather than an hour.  Best known configuration (3 profiles, temp 1.0,
+slope walk x9, per-well dip correction fitted on 500 training wells), two repeats each:
+
+    sibling-w   pooled ft            mean well        p50 well        p95 well
+      0.00      12.733 / 12.652    10.269 / 10.298   7.770 / 7.931  25.119 / 24.068
+      0.75      12.077 / 11.950     9.661 /  9.619   7.428 / 7.630  23.386 / 23.699
+
+    -0.68 ft pooled, against a within-arm spread of 0.08-0.13 ft.
+
+Every statistic moves the right way, and the gap is five times the repeat noise.  On the
+plain untuned filter the same change is 17.18 -> 16.03.  **This is the first change in the
+whole campaign that improved a prediction by changing the model's input rather than by
+recalibrating its output.**
+
+### It does not help the ensemble -- and the reason is the interesting part
+
+A better filter should be a better blend partner.  It is not:
+
+    partner        RMSE     corr with ConvNeXt   optimal weight   blended RMSE   break-even
+    pf w=0        12.733          0.340              0.0216          4.9303        14.50 ft
+    pf w=0.75     12.077          0.367              0.0201          4.9321        13.45 ft
+
+Improving the filter by 0.66 ft also raised its correlation with the ConvNeXt from 0.340 to
+0.367, which lifted the break-even threshold (`RMSE < sigma_c / rho`) from 14.50 ft to
+13.45 ft by more than the accuracy gain closed.  The net blend is 0.002 ft *worse*.
+
+This is the blend algebra being explicit about something that is easy to miss: **a partner
+gets better at the ensemble only if its accuracy improves faster than its correlation.**
+The sibling reference improves the filter by teaching it the same thing the CNN already
+knows -- what the rock looks like -- so it buys accuracy and redundancy in one move.  For
+the filter standalone that is a clear win.  For the filter as an ensemble member it is a
+wash.
+
+The corollary is that the sibling reference has to be tested *inside* the CNN to pay off on
+the leaderboard, not bolted onto a second model beside it.
+
+### Running it
+
+    :: AnchorCNN at C geometry with the sibling reference (~1 h on this machine)
+    python -u anchor_train.py --out runs/C_s1_sib --row 1.0 --n-move 5 --epoch-len 1150 --epochs 120 --eval-every 5 --tta 8 --seed 1 --sibling-w 0.75
+
+    :: its paired control is the existing runs/C_s1 (6.0241 ft), same seed, same geometry
+    python ../kaggle_1st_place/solution/seq_NN_robust_compare.py --base runs/C_s1 --treat runs/C_s1_sib --output-dir runs/C_s1_sib
+
+    :: rescoring an existing checkpoint needs the same weight it was trained with
+    python anchor_eval.py --models runs/C_s1_sib/model_last.pt --out runs/C_s1_sib_tta8 --row 1.0 --n-move 5 --tta 8 --sibling-w 0.75
+
+`--sibling-w 0` is the default and reproduces every earlier run byte for byte; the sibling
+code is not reached at all.

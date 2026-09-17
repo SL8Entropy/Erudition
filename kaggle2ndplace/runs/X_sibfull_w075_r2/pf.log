@@ -1,0 +1,20 @@
+# 2026-09-17 07:49:03  anchor_pf.py --out runs/X_sibfull_w075_r2 --profiles 3 --tune 120 --tune-temps 1.0 --tune-rates 9 --dip-correct 500 --sibling-w 0.75 --force
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+sibling bank: 54 systems over 773 wells; 618 training laterals binned into 52 of them; members median 8, max 55, 12 singleton systems
+sibling reference at weight 0.75: 153/155 holdout wells have siblings (median 21)
+holdout 155 wells, 754,122 rows; 3 particle-filter profile(s), no training involved
+tuning on 120 training wells (the holdout is not touched)
+   temp x1    rate x9    N=512   jump=0.004  ess=0.5  ->  14.087 ft
+   chosen: obs_temp x1, rate_std x9  (14.087 ft on train)
+dip corrector: neighbour pool 618 training wells, fitting on 500
+   offset a [ft]    in-sample R2 0.253   mean +0.26659
+   slope b [ft/ft]  in-sample R2 0.311   mean -0.00181
+   strongest features for the slope: dz_mean (-0.0120), pf_slope (+0.0042), r_nbr (+0.0033), r0 (+0.0032)
+  50/155 wells (3s)
+  100/155 wells (5s)
+  150/155 wells (8s)
+filtered 155 wells in 8s
+
+PARTICLE FILTER POOLED RMSE: 11.9503 ft over 754,122 rows in 155 wells
+per-well RMSE  mean 9.619  p50 7.630  p95 23.699
+spread vs |error|, Spearman rho = 0.405

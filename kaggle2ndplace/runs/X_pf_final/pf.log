@@ -1,0 +1,22 @@
+# 2026-09-16 18:22:44  anchor_pf.py --out runs/X_pf_final --profiles 3 --tune 120 --tune-temps 1.0 --tune-rates 9 --dip-correct 500 --compare ../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt --force
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+holdout 155 wells, 754,122 rows; 3 particle-filter profile(s), no training involved
+tuning on 120 training wells (the holdout is not touched)
+   temp x1    rate x9    N=512   jump=0.004  ess=0.5  ->  15.916 ft
+   chosen: obs_temp x1, rate_std x9  (15.916 ft on train)
+dip corrector: neighbour pool 618 training wells, fitting on 500
+   offset a [ft]    in-sample R2 0.243   mean -0.71036
+   slope b [ft/ft]  in-sample R2 0.280   mean -0.00257
+   strongest features for the slope: dz_mean (-0.0115), pf_slope (+0.0040), r0 (+0.0031), r_nbr (+0.0030)
+  50/155 wells (3s)
+  100/155 wells (5s)
+  150/155 wells (8s)
+filtered 155 wells in 8s
+
+PARTICLE FILTER POOLED RMSE: 13.0723 ft over 754,122 rows in 155 wells
+per-well RMSE  mean 10.460  p50 7.677  p95 26.756
+spread vs |error|, Spearman rho = 0.411
+
+against rb_v3_tta_ep150: it 4.9374 ft, PF 13.0723 ft
+  residual correlation 0.308  (AnchorCNN manages 0.669; below ~0.5 is the prize)
+  best blend: 0.030 PF -> 4.9234 ft  (-0.0140 ft)

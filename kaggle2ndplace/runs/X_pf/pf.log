@@ -1,0 +1,15 @@
+# 2026-09-16 17:46:02  anchor_pf.py --out runs/X_pf --profiles 3 --compare ../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt --force
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+holdout 155 wells, 754,122 rows; 3 particle-filter profile(s), no training involved
+  50/155 wells (3s)
+  100/155 wells (7s)
+  150/155 wells (10s)
+filtered 155 wells in 10s
+
+PARTICLE FILTER POOLED RMSE: 28.9770 ft over 754,122 rows in 155 wells
+per-well RMSE  mean 19.802  p50 11.873  p95 59.524
+spread vs |error|, Spearman rho = 0.566
+
+against rb_v3_tta_ep150: it 4.9374 ft, PF 28.9770 ft
+  residual correlation 0.201  (AnchorCNN manages 0.669; below ~0.5 is the prize)
+  best blend: 0.000 PF -> 4.9374 ft  (+0.0000 ft)
