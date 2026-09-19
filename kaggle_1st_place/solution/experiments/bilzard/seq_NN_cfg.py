@@ -3180,6 +3180,10 @@ def make_bilzard_cfgs():
         ("pf_v1", pf_cfg),
         ("cnx_tiny", _backbone("hf_hub:timm/convnext_tiny.in12k_ft_in1k_384")),
         ("cnx_base", _backbone("hf_hub:timm/convnext_base.fb_in22k_ft_in1k_384")),
+        # FastViT-SA12: a third of ConvNeXt-small's compute (40 vs 127 GFLOP), the cheapest
+        # backbone that drops into this U-Net unchanged.  Apple's distilled ImageNet-1k
+        # weights; note the ConvNeXts start from ImageNet-12k, a stronger pretraining.
+        ("cnx_fastvit", _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
     ]
 
 

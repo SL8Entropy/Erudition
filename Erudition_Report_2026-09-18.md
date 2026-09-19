@@ -37,8 +37,12 @@ open and how to carry on.
   "AnchorCNN") using one fixed weight. The gain is tiny (0.085 ft), smaller than our test can
   reliably detect, and it makes the system 5–6× slower. **For a drilling rig, one model is the
   better choice.**
-- **Current recommendation for a rig:** one ConvNeXt, run once, no blending, no averaging.
-  A smaller version (ConvNeXt-tiny) that needs a third less computing is being tested now.
+- **Current recommendation for a rig: ConvNeXt-tiny, run once, no blending, no averaging.** Tested
+  on 19 September, it was as accurate as the standard ConvNeXt-small within what we can measure,
+  while needing about a third less computing and running about 27% faster (§6).
+- **Correction to all ConvNeXt scores:** the 1st-place code picks the checkpoint that scores best
+  on the test wells, so its reported numbers are about 0.15 ft flattering (§7.7). Comparisons
+  between ConvNeXt runs are still fair, because they were all picked the same way.
 - **Most ideas we tried did not measurably help.** A few failed badly and can be ruled out.
   Many more changed the score by less than luck does, so we can't tell whether they help.
   Some tests turned out to be broken.
@@ -162,8 +166,9 @@ Because the score is noisy, we used three checks alongside the raw number:
 | AnchorCNN + tracker inputs | 5.84 / 6.11 | two seeds; each beat its matching plain run |
 | AnchorCNN + synthetic data (flawed run) | 6.30 | only 32% synthetic instead of 77%, and twice the training steps; see §7.1 |
 | ConvNeXt, 60 rounds | 5.16 | |
-| ConvNeXt, 150 rounds | 4.98 | |
-| ConvNeXt, 150 rounds + averaging over 8 shifted views | **4.94** | best single model |
+| ConvNeXt-small, 150 rounds | 4.98 | checkpoint picked on test wells (§7.7) |
+| ConvNeXt-small, 150 rounds + averaging over 8 shifted views | **4.94** | best single model; same caveat |
+| **ConvNeXt-tiny**, 150 rounds | **4.90** | same caveat; a third less computing than small |
 | ConvNeXt + AnchorCNN, one fixed weight | **4.85** | best overall; 5–6× slower |
 | Our particle filter (best version) | ~12.0 | a tracker, not a learned model |
 | The 1st-place author's particle filter | 7.35 | much better tracker than ours |
@@ -371,16 +376,33 @@ Measured on this laptop's GPU, for one well at a time, counting the network only
   network for a cheaper one saves only about 10%.
 - **Blending costs 5–6× the ConvNeXt alone** (plus a tracker running on the CPU), for 0.085 ft.
 - **View-averaging (TTA) costs 8×** for 0.04 ft on the ConvNeXt.
-- **ConvNeXt-tiny** is the same design with fewer layers in one section and exactly the same
-  pretraining: about a third less computing and 25% faster. Whether it loses accuracy is being
-  tested now.
+- **ConvNeXt-tiny has been tested, and it loses nothing measurable.** It is the same design with
+  fewer layers in one section and exactly the same pretraining: about a third less computing and
+  ~27% faster. Its reported score was 4.90 vs 4.98 for small, but both were picked on the test
+  wells (§7.7). The unpicked checkpoints disagree about which is ahead, and both gaps are under
+  0.1 ft:
+
+  | | small | tiny |
+  |---|---|---|
+  | last checkpoint | 5.09 | 5.14 |
+  | average over rounds 100–150 | 5.16 | 5.09 |
+
+  So: no measurable difference. Tiny's training was also steadier.
+- **FastViT-SA12** is the next cheaper candidate: 12.3M numbers, 40 GFLOP (a third of small),
+  20 ms. It is set up and its weights are downloaded, but it hasn't been trained yet (§9.1). Its
+  pretraining is weaker than the ConvNeXts' (ImageNet-1k vs 12k).
+- **Other drop-in replacements** tested for fit (build and run only): ConvNeXt-V2 tiny/nano,
+  InceptionNeXt-tiny, ConvFormer-S18, CAFormer-S18. MambaOut, EfficientNetV2, RegNet, RDNet and
+  Hiera would need code changes. Real Mamba/Samba models can't run on this Windows setup. The
+  1st-place author had already built 10 transformer backbones plus two other model types, and
+  kept ConvNeXt-small in all six submitted versions.
 - **ConvNeXt-base** (bigger) is not recommended: 1.7× the computing, no matching pretraining,
   likely won't fit in training on a 6 GB GPU, and the model is limited by data, not size.
 - **Putting a ConvNeXt inside the AnchorCNN** would cost about 15× the AnchorCNN's normal
   computing (122 GFLOP).
 
-**Recommendation:** one ConvNeXt, one pass, no blend, no averaging. Use tiny if its test
-comes in within about 0.3 ft of small.
+**Recommendation:** ConvNeXt-tiny, one pass, no blend, no averaging. If FastViT-SA12 also comes
+in with no measurable loss, it would cut the computing roughly in half again.
 
 ## 7. Caveats that apply to the results
 
@@ -414,11 +436,24 @@ comes in within about 0.3 ft of small.
    wells: the 1st-place model's scaling constants and its tracker settings. The effect is
    probably small, but it isn't zero.
 5. **`model_best.pt` must never be reported.** The training script saves the checkpoint that
-   scored best on the test wells, which is choosing by the answer. Every number in this report
-   comes from the final checkpoint (`model_last.pt`).
+   scored best on the test wells, which is choosing by the answer. Every **AnchorCNN** number in
+   this report comes from the final checkpoint (`model_last.pt`). The ConvNeXt numbers are a
+   different story; see item 7.
 6. **The tracker is random.** It draws a different random pattern each time the program starts
    unless `PYTHONHASHSEED` is fixed, so repeat runs differ slightly. Tracker results in this
    report were repeated to account for this.
+7. **Every ConvNeXt score was picked using the test wells** (found 19 September). In our test
+   setup, the 1st-place code checks its progress on the 155 test wells and keeps whichever
+   checkpoint scored best there. In every run checked, that picked checkpoint is **about 0.14–0.15
+   ft better** than the same run's average over its last 50 rounds. What this means:
+   - ConvNeXt runs can still be compared with each other fairly, since all were picked the same way.
+   - ConvNeXt-vs-AnchorCNN comparisons were slightly tilted in the ConvNeXt's favour, because the
+     AnchorCNN numbers are unpicked.
+   - The blend scores (4.85) use a picked ConvNeXt, so they are somewhat flattering too.
+
+   The earlier project notes wrongly said checkpoint choice was safe. The script
+   `seq_NN_honest_curve.py` reads a run's log and prints the unpicked alternatives (last
+   checkpoint, and average over late rounds).
 
 ## 8. Mistakes we made, and what we corrected
 
@@ -436,23 +471,25 @@ comes in within about 0.3 ft of small.
 | Synthetic generator gave up after one try | Asked for 77% synthetic wells, delivered 32% | Now retries up to 12 pairings; delivers 73% |
 | Synthetic run changed two things | It also did 2.3× the training steps, so it overfitted within the run | The proper test (§9.1, run 2) matches steps with its comparison run |
 | Called the synthetic run "worse" from its final score alone | The final score is inside the normal range, and the whole curve leaned the other way | Judge on the curve's average as well as the endpoint |
+| Treated ConvNeXt scores as unpicked | The 1st-place code keeps the checkpoint that scores best on the test wells, and the notes wrongly called this safe | Flattery measured at ~0.15 ft; unpicked scores now read from the logs (§7.7) |
 
 ## 9. What is still open
 
 ### 9.1 Runs waiting, most important first
 
-**1) ConvNeXt-tiny.** Decides the rig model. About 3.5–4 hours; the weights are downloaded and
-checked. Run from `kaggle_1st_place\solution`:
+**1) FastViT-SA12.** The next rung down in cost after ConvNeXt-tiny, which is done (§6). About
+3 hours; the weights are downloaded and checked. Run from `kaggle_1st_place\solution`:
 ```
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name cnx_tiny --epochs 150 --output-dir results/cnx_tiny_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name cnx_fastvit --epochs 150 --output-dir results/cnx_fastvit_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
 ```
+Then compare using the **unpicked** scores, not just the reported one:
 ```
-python seq_NN_robust_compare.py --base results/0801_V2_ep150 --treat results/cnx_tiny_ep150 --output-dir results/cnx_tiny_ep150
+python seq_NN_honest_curve.py results/0801_V2_ep150 results/cnx_tiny_ep150 results/cnx_fastvit_ep150
 ```
-How to read it, against 4.979 ft:
-- within ~0.3 ft: as good as we can measure
-- more than ~0.5 ft worse: it genuinely hurts
-- in between: needs a second run
+How to read it, using the "last" and "late avg" columns against tiny (5.14 / 5.09):
+- within ~0.1–0.15 ft on both: as good as we can measure, at about half tiny's computing
+- clearly worse on both: the cheaper design (or its weaker pretraining) costs accuracy
+- mixed: needs a second run
 
 **2) AnchorCNN with synthetic data, done properly.** The first attempt was flawed (§7.1). This
 version changes only one thing (synthetic data on), with the generator bug fixed and the same

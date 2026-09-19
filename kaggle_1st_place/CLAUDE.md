@@ -593,8 +593,14 @@ the question (345x400 tokens).
 ## Known caveat
 
 `cfg.target_stats` are hardcoded constants fitted on the full original training set, so
-they carry slight information about the holdout wells. Everything actually learned --
-weights, geo prior, checkpoint choice -- is split-safe.
+they carry slight information about the holdout wells. Weights and the geo prior are
+split-safe. **Checkpoint choice is not** (corrected 2026-09-19): the holdout wells are the
+validation set, and `seq_NN_train.py` keeps the lowest-validation checkpoint (`if val_rmse <
+best_score: best_state = ...`; `model.load_state_dict(best_state)`). Every reported holdout
+number is therefore scored on a checkpoint picked using the test wells -- about 0.14-0.15 ft
+better than the same run's epoch>=100 average, in every run checked. Comparisons between runs
+stay like-for-like but are optimistic and noisier. `seq_NN_honest_curve.py <run dirs>` prints
+the unpicked alternatives (last checkpoint, late average) from each run's log.
 
 ## PF channels and backbone size (added from the 2nd-place workspace)
 
@@ -615,3 +621,60 @@ weights, geo prior, checkpoint choice -- is split-safe.
   weights are not cached and must be downloaded before `--offline-timm` will work. **tiny is now cached** (commit bac32564, 114.4 MB, checksum verified against the HF LFS sha256, fetched with urllib since `requests` fails TLS here); `cnx_tiny` built offline loads it exactly (backbone tensor diff 0.0, stage 3 = 9 blocks).
 - Size in this U-Net (400x345, fp16): nano 17.8M/54 GFLOP/21 ms, tiny 31.9M/82/22 ms,
   small 53.6M/127/30 ms, base 94.8M/214/40 ms (batch 1, network only).
+
+## Backbone replacements and the bottleneck-MHSA proposal (checked 2026-09-19)
+
+**The author already explored replacements and kept ConvNeXt-small every time.** The code
+has four model types (`unet`, `trf_unet`, `two_stage_unet`, `bidir_convgru`) and the
+transformer path lists 10 backbones in `seq_NN_trf_backbones.py` (Swin tiny/small/base,
+CAFormer-S18, MaxViT, CoAtNet 1/2, PVTv2-b2, Twins-SVT). All six submitted snapshots use
+`model: unet` with `convnext_small`.
+
+**Drop-in test** (built through `make_model`, real 16x400x345 forward, fp16, batch 1,
+no code changes; `unet_arch` kept as the label, `unet_timm_model_name` swapped):
+
+    works:  convnext_small 53.6M/127 GFLOP/33 ms, convnext_tiny 31.9M/82/23,
+            convnextv2_tiny 32.0M/82/33, convnextv2_nano 17.9M/54/27,
+            inception_next_tiny 28.1M/79/25, convformer_s18 26.3M/69/38,
+            caformer_s18 25.8M/83/40, fastvit_sa12 12.3M/40/20
+    fails:  mambaout_* (NHWC layout breaks the BN norm swap), tf_efficientnetv2_s,
+            regnety_016, rdnet_tiny, hiera_tiny_224 (no ConvNeXt-style stages),
+            edgenext_small
+
+"Works" means builds and runs, not trained or validated.  Real Mamba/VMamba/Samba need
+`mamba_ssm` CUDA kernels with no official Windows build (not installed here); Samba is a
+language-model architecture with no pretrained vision weights.
+
+**`arch_v5_bottleneck_mhsa` guide, verified against `experiments/arch`:**
+- Correct: wiring at `seq_NN_models.py:679`; `backbone_stages` is an `nn.ModuleList`
+  (`seq_NN_pretrained_unet.py:543`); `model_named_parameters` includes `("unet", self.unet)`
+  (line 779); `model_cfg` is the *same dict object* as `unet_cfg` (`set_model_name`), so the
+  guide's in-place edits need no `refresh()`; stage 3 is 22x13 = 286 tokens.
+- Layer-wise LR decay would give a block inside `backbone_stages[3]` stage 3's reduced rate,
+  but `layer_wise_lr` is **False** in 0801_V2 (lr 2e-4 everywhere), so it is not an issue.
+- **Flaw in Step 4:** same-seed builds are not comparable. Adding a block before the heads
+  shifts their random init -- measured with `arch_v2_axial`: 4 of 110 shared tensors differ,
+  all in `unet_gr_rmse_head`. Copy the plain model's `state_dict` into the new one
+  (`strict=False`) before comparing outputs.
+- Expected value is low: the same zero-gated design in `arch_v2_axial` trained to
+  gamma_attn mean 0.011 in 60 epochs and scored -0.024 (inside the -0.030 null draw); stage-3
+  ConvNeXt blocks already cover most of a 22x13 map; the model is data-limited.  If run, use
+  150 epochs against `0801_V2_ep150` and report the trained gamma values.
+
+## ConvNeXt-tiny result and FastViT (2026-09-19)
+
+`results/cnx_tiny_ep150`, 150 epochs, 1 model, same recipe as `0801_V2_ep150`:
+
+    reported (test-picked, smoothed)   tiny 4.9044   small 4.9785
+    picked, raw                        tiny 4.9457   small 5.0212   both at epoch 110
+    last checkpoint, raw               tiny 5.1435   small 5.0907
+    average epochs >= 100, raw         tiny 5.0926   small 5.1628   (sd 0.066 vs 0.118)
+
+The two unpicked statistics disagree in sign, both by < 0.1 ft: **tiny is as good as small
+within what this holdout can measure**, at 64% of the compute (82 vs 127 GFLOP) and ~27%
+faster. "Tiny is better" is not supportable.
+
+`cnx_fastvit` added to `experiments/bilzard` (`fastvit_sa12.apple_dist_in1k`, ImageNet-1k
+distilled; the ConvNeXts use stronger ImageNet-12k pretraining). Weights cached (46.5 MB,
+checksum verified); built offline, 12.3M params, all 94 backbone weight tensors identical to
+the download, stages [2, 2, 6, 2]. 40 GFLOP / 20 ms in this U-Net.
