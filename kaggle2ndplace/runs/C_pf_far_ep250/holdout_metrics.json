@@ -1,0 +1,32 @@
+{
+  "pooled_rmse": 7.353121059767957,
+  "n_wells": 155,
+  "n_rows": 754122,
+  "well_rmse_mean": 5.344021046711888,
+  "well_rmse_p50": 3.7275720672308412,
+  "well_rmse_p95": 15.265406453033764,
+  "sse_share_top5": 0.3739658008305357,
+  "worst_wells": {
+    "f6d009f4": 27.799,
+    "e5864244": 29.335,
+    "fb03ae90": 19.698,
+    "d0cb63ae": 19.038,
+    "e7818f7a": 18.432
+  },
+  "failed_wells": [],
+  "pooled_rmse_1phase": 7.916452972653788,
+  "tta_gain": 0.5633319128858316,
+  "epochs": 250,
+  "tta": 8,
+  "best_epoch": 69,
+  "best_epoch_rmse": 6.493349328669976,
+  "scored": "last",
+  "arch": "effnet",
+  "row": 1.0,
+  "n_move": 5,
+  "seed": 1,
+  "epoch_len": 1150,
+  "gr_prefilter_ft": 0.0,
+  "distill_teachers": [],
+  "params_m": 3.742
+}

@@ -1,0 +1,21 @@
+# 2026-09-17 19:58:11  anchor_ensemble.py --anchor runs/C_s1_pf_sib/holdout_predictions.pqt --convnext ../kaggle_1st_place/solution/results/rb_v3_tta_ep150/holdout_predictions.pqt --out runs/X_ens_pf_sib
+wells: cache hit C:\Users\sudha\OneDrive\Documents\GitHub\Erudition\kaggle2ndplace\cache\wells__773_cf8a82a2.npz
+155 wells, 754,122 rows; anchor std feature absent; convnext neighbour feature present
+fold 0: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.163  convnext 4.888
+    gate     ce_w=0     mean w=0.229  decisiveness=0.565  train MSE 20.416 / CE 0.000  fold RMSE 4.604
+fold 1: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.268  convnext 5.431
+    gate     ce_w=0     mean w=0.236  decisiveness=0.527  train MSE 20.536 / CE 0.000  fold RMSE 5.533
+fold 2: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.254  convnext 4.735
+    gate     ce_w=0     mean w=0.243  decisiveness=0.514  train MSE 20.613 / CE 0.000  fold RMSE 4.664
+fold 3: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.179  convnext 4.923
+    gate     ce_w=0     mean w=0.349  decisiveness=0.658  train MSE 16.401 / CE 0.000  fold RMSE 5.013
+fold 4: 31 test / 100 fit / 24 val wells  global_w(anchor)=0.212  convnext 4.668
+    gate     ce_w=0     mean w=0.425  decisiveness=0.632  train MSE 20.781 / CE 0.000  fold RMSE 5.198
+
+method         pooled  median well  p95 well   mean w  decisive
+convnext       4.9374        2.835     9.727
+anchor         6.0885        3.600    13.070
+mean           5.0219        2.909    10.206
+global_w       4.8705        2.801     9.243
+gate           5.0151        2.964     9.671    0.297     0.580
+oracle_row     3.9134        2.146     8.095   (uses the answer; upper bound)

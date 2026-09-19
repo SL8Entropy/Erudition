@@ -65,6 +65,8 @@ CACHE_VERSION = 2
 
 
 _GR_PREFILTER_FT = 0.0
+_PF_PROFILES = 0
+_SIB_SIGMA = False
 
 
 def prefilter_gr(gr: np.ndarray, md: np.ndarray, width_ft: float) -> np.ndarray:
@@ -97,7 +99,9 @@ def prefilter_gr(gr: np.ndarray, md: np.ndarray, width_ft: float) -> np.ndarray:
 
 
 def set_grid(row: float | None = None, colw: float | None = None,
-             h: int | None = None, gr_prefilter_ft: float | None = None) -> dict:
+             h: int | None = None, gr_prefilter_ft: float | None = None,
+             pf_profiles: int | None = None,
+             sib_sigma: bool | None = None) -> dict:
     """Override the grid constants in ``gr2tvt_data`` for a resolution variant.
 
     ``ROW``/``T``/``LEVELS`` and ``COLW``/``H`` are module-level constants in the
@@ -114,9 +118,13 @@ def set_grid(row: float | None = None, colw: float | None = None,
     ``gr_prefilter_ft`` > 0 applies ``prefilter_gr`` inside every ``build_item``, at train
     and inference alike, since it is part of the input representation.
     """
-    global _GR_PREFILTER_FT
+    global _GR_PREFILTER_FT, _PF_PROFILES, _SIB_SIGMA
     if gr_prefilter_ft is not None:
         _GR_PREFILTER_FT = float(gr_prefilter_ft)
+    if pf_profiles is not None:
+        _PF_PROFILES = int(pf_profiles)
+    if sib_sigma is not None:
+        _SIB_SIGMA = bool(sib_sigma)
     if row is not None:
         gd.ROW = float(row)
         gd.T = int(2 * gd.WIN / gd.ROW)
@@ -125,7 +133,8 @@ def set_grid(row: float | None = None, colw: float | None = None,
         gd.COLW = float(colw)
     if h is not None:
         gd.H = int(h)
-    return dict(row=gd.ROW, colw=gd.COLW, h=gd.H, gr_prefilter_ft=_GR_PREFILTER_FT)
+    return dict(row=gd.ROW, colw=gd.COLW, h=gd.H, gr_prefilter_ft=_GR_PREFILTER_FT,
+                pf_profiles=_PF_PROFILES, sib_sigma=_SIB_SIGMA)
 
 
 def grid_worker_init(grid: dict):
@@ -259,6 +268,7 @@ class AugCfg:
     specaug_prob: float = 0.5
     specaug_spans: tuple = (1, 3)      # number of masked spans, inclusive range
     specaug_cols: tuple = (1, 21)      # span width in 32 ft columns, inclusive range
+    far_anchor_prob: float = 0.0       # see _window(); 0 reproduces the original sampler
     synth_prob: float = 0.0            # see synth_well(); 0 disables it entirely
     synth_mix: tuple = (0.2, 0.8)      # trajectory mixup lambda range
     move_cap_ft: float = 20.0          # widest move the 21-class vocabulary can express
@@ -346,12 +356,34 @@ def _window(tvt: np.ndarray, dmd: float, rng: np.random.Generator, cfg: AugCfg,
     if lo_i0 > hi_i0:
         return None
 
-    i0 = int(rng.integers(lo_i0, hi_i0 + 1))
+    # Fake-anchor augmentation.  Drawing i0 uniformly and then truncating a length drawn in
+    # feet biases hard toward short windows: measured over 400 augmented samples, training
+    # covered 0-3 kft from the anchor at 1.3x the holdout's rate and 6-8 kft at 0.17x, and
+    # never reached past 7.7 kft where the holdout goes to 10.1.  Since ~70% of the squared
+    # error lives in the far half, the model was starved exactly where it fails.  With
+    # probability ``far_anchor_prob`` the anchor is pulled back into the early part of its
+    # legal range and the window is extended as far as the geometry allows.
+    #
+    # First version of this pinned the anchor to the early quarter AND always took the
+    # longest legal window.  The start then always clipped to the lateral's first row and the
+    # end to its last, so two independent draws from one well gave the *identical* window
+    # (median overlap 1.00, against 0.87 for the normal sampler).  At prob 0.6 that turned 60%
+    # of training into repeats; runs/C_pf_far_ep250 memorised them and degraded steadily from
+    # epoch 69 (6.49) to 250 (7.92).  Far mode now keeps both draws random: the anchor anywhere
+    # in the early half, and the length anywhere between an ordinary draw and the maximum.
+    far = bool(cfg.far_anchor_prob) and rng.random() < cfg.far_anchor_prob
+    if far:
+        i0 = int(rng.integers(lo_i0, lo_i0 + max(1, (hi_i0 - lo_i0) // 2 + 1)))
+    else:
+        i0 = int(rng.integers(lo_i0, hi_i0 + 1))
     # the level shift moves the anchor afterwards, so it comes out of the same budget
     cap = max(8.0, cfg.dev_cap_ft - cfg.level_shift_ft)
     dev = np.abs(tvt[i0:hi].astype(np.float64) - float(tvt[i0 - 1])) > cap
     max_len = int(np.argmax(dev)) if dev.any() else hi - i0
-    ev_len = min(int(rng.uniform(*cfg.eval_ft) / dmd), int(gd.H * gd.COLW / dmd), max_len)
+    room = min(int(gd.H * gd.COLW / dmd), max_len)
+    ev_len = min(int(rng.uniform(*cfg.eval_ft) / dmd), room)
+    if far and room > ev_len:
+        ev_len = int(rng.uniform(ev_len, room))      # long-biased, but still a draw
     if ev_len < min_eval:
         return None
     pre_len = max(int(rng.uniform(*cfg.pre_ft) / dmd), min_pre)
@@ -400,7 +432,7 @@ def augment(w: dict, rng: np.random.Generator, cfg: AugCfg,
 
 
 def synth_well(w: dict, other: dict, rng: np.random.Generator,
-               cfg: AugCfg) -> dict | None:
+               cfg: AugCfg, donor: dict | None = None) -> dict | None:
     """A partially faithful version of the writeup's synthetic wells.
 
     Implements steps 3-5 of the pipeline -- mix two real TVT trajectories, read the GR
@@ -409,10 +441,19 @@ def synth_well(w: dict, other: dict, rng: np.random.Generator,
         TVT_mix = k*TVT_a + (1-k)*TVT_b        (trajectory mixup)
         GR      = f(TVT_mix) + r               (f = typewell profile, r = real residual)
 
-    Steps 1-2 -- consolidating the 773 typewells into master series and re-skinning a
-    trajectory into a different system at the same quantile of its drilling band -- are
-    NOT implemented, so the vertical material stays the well's own typewell and the
-    diversity is lower than the author's.  Off by default (``synth_prob=0``).
+    With ``donor`` supplied, step 2 is implemented as well: the mixed path is re-skinned
+    into *another master system's* typewell, placed at the same quantile of its drilling
+    band, and the GR regenerated from that system.  This is the difference 22nd place
+    called the clearest miss of their campaign -- mixing trajectories alone copies the
+    drift target verbatim and creates no new (trajectory x geology) pairs, which is why
+    their donor-relocation synthesis was worth +-0.00 in the blend.  Choosing the donor
+    from a different system is what makes the pair new.
+
+    Off by default (``synth_prob=0``).
+
+    ``tvt_input`` is copied from the source and is only correct because ``augment`` always
+    recomputes it from the well's own ``tvt`` after cropping; this function is never used
+    without it.
     """
     n = min(len(w["md"]), len(other["md"]))
     twt, twg = w["tw_tvt"].astype(np.float64), w["tw_gr"].astype(np.float64)
@@ -426,6 +467,23 @@ def synth_well(w: dict, other: dict, rng: np.random.Generator,
         return None            # would need GR the typewell does not cover; reject, don't clip
 
     r = w["gr"][:n].astype(np.float64) - np.interp(np.clip(a, twt[0], twt[-1]), twt, twg)
+
+    out_twt, out_twg = w["tw_tvt"], w["tw_gr"]
+    if donor is not None:
+        dt = donor["tw_tvt"].astype(np.float64)
+        dg = donor["tw_gr"].astype(np.float64)
+        if len(dt) < 8 or dt[-1] - dt[0] <= 0 or twt[-1] - twt[0] <= 0:
+            return None
+        # land the path at the same relative depth inside the donor's band.  A pure offset
+        # keeps GR = f(TVT) exactly true for the donor profile; a stretch would not.
+        q = float(np.clip((tvt.mean() - twt[0]) / (twt[-1] - twt[0]), 0.0, 1.0))
+        tvt = tvt - tvt.mean() + (dt[0] + q * (dt[-1] - dt[0]))
+        if tvt.min() <= dt[0] or tvt.max() >= dt[-1]:
+            return None
+        twt, twg = dt, dg
+        out_twt = donor["tw_tvt"]
+        out_twg = donor["tw_gr"]
+
     gr = np.interp(tvt, twt, twg) + np.where(np.isfinite(r), r, 0.0)
     gr[~np.isfinite(w["gr"][:n])] = np.nan
 
@@ -437,7 +495,7 @@ def synth_well(w: dict, other: dict, rng: np.random.Generator,
     return dict(md=w["md"][:n].copy(), z=(z_layer - tvt).astype(np.float32),
                 tvt=tvt.astype(np.float32), gr=gr.astype(np.float32),
                 tvt_input=w["tvt_input"][:n].copy(),
-                tw_tvt=w["tw_tvt"], tw_gr=w["tw_gr"])
+                tw_tvt=out_twt, tw_gr=out_twg)
 
 
 # ------------------------------------------------------------------------- item build
@@ -455,6 +513,20 @@ def build_item(w: dict, ps_col: int, with_label: bool, tvt_shift: float = 0.0,
     item = (c["t_n"], c["h_n"], c["h_valid"], c["t_cover"], c["y"].astype(np.float32),
             c["meta"]["ncol_tot"], c["y_bnd"], c["h_cnt"], c["h_rows"], c["k_lv"],
             c["k_flag"], c["s_n"], c["s_cover"], c["d_n"])
+    if _PF_PROFILES > 0 or _SIB_SIGMA:
+        pf_lv = pf_sd = None
+        if _PF_PROFILES > 0:
+            from anchor_pfchan import pf_level_columns
+            pf_lv, pf_sd = pf_level_columns(w, c["meta"], len(c["h_n"]), _PF_PROFILES)
+        item = item + (None, pf_lv, pf_sd)      # slot 14 is the author's zr_n, left unused
+        if _SIB_SIGMA:
+            a0 = float(c["meta"]["tvt_ps"]) - float(c["meta"]["tvt_shift"])
+            if "sib_sd" in w:
+                sg = np.interp(a0 + gd.LEVELS, w["sib_sd_tvt"].astype(np.float64),
+                               w["sib_sd"].astype(np.float64), left=0.0, right=0.0)
+            else:
+                sg = np.zeros(len(gd.LEVELS))
+            item = item + ((sg / gd.GR_SD).astype(np.float32),)
     return dict(item=item, meta=c["meta"])
 
 
@@ -465,9 +537,12 @@ class AnchorWellDataset(Dataset):
     the batch is handed to the author's code in the shape it already expects.
     """
 
+
+    SYNTH_TRIES = 12          # fresh (trajectory, donor) pairings before falling back to real
     def __init__(self, wells: dict[str, dict], names: list[str], aug: AugCfg | None,
                  ps_col: int = 16, seed: int = 0, epoch_len: int | None = None,
-                 pre_ps_label: bool = False):
+                 pre_ps_label: bool = False, groups: dict | None = None):
+        self.groups = groups or {}
         self.wells, self.names, self.aug = wells, list(names), aug
         self.ps_col, self.seed, self.pre_ps_label = ps_col, seed, pre_ps_label
         self.epoch_len = int(epoch_len) if epoch_len else len(self.names)
@@ -494,10 +569,24 @@ class AnchorWellDataset(Dataset):
                 else self.names[idx]
             w = self.wells[name]
             if self.aug.synth_prob and rng.random() < self.aug.synth_prob:
-                other = self.wells[self.names[int(rng.integers(len(self.names)))]]
-                s = synth_well(w, other, rng, self.aug)
-                if s is not None:
-                    w = s
+                # A single (trajectory, donor) draw is rejected ~60% of the time -- the mixed
+                # path must fit inside the donor's typewell band -- and falling straight back
+                # to the real well meant runs/C_synth_s1, asked for 77% synthetic, got 32%.
+                # Retry fresh pairings so synth_prob means what it says.
+                for _pair in range(self.SYNTH_TRIES):
+                    other = self.wells[self.names[int(rng.integers(len(self.names)))]]
+                    donor = None
+                    if self.groups:
+                        mine = self.groups.get(name)
+                        for _ in range(8):   # a geology donor from another master system
+                            cand = self.names[int(rng.integers(len(self.names)))]
+                            if self.groups.get(cand) != mine:
+                                donor = self.wells[cand]
+                                break
+                    s = synth_well(w, other, rng, self.aug, donor=donor)
+                    if s is not None:
+                        w = s
+                        break
             try:
                 aw, shift, phase = augment(w, rng, self.aug, self.ps_col)
                 out = build_item(aw, self.ps_col, True, tvt_shift=shift, md_phase=phase,
@@ -518,10 +607,17 @@ def collate(batch: list[dict]) -> list[dict]:
 
 
 def batch_tensors(batch: list[dict], device, model):
-    """(x, y_bnd, d_n) for a batch, built through the author's ``items_to_x``."""
+    """(x, y_bnd, d_n) for a batch, built through the author's ``items_to_x``.
+
+    The particle-filter channels are concatenated *after* ``items_to_x`` rather than inside
+    it: the author's assembler only reads tuple slots 0-14, so extra slots pass through it
+    untouched and the two channels are appended here.  ``src/`` is not modified.
+    """
     from gr2tvt_model import items_to_x
     items = [b["item"] for b in batch]
     x, _ = items_to_x(items, device, model)
+    from anchor_pfchan import append_channels
+    x = append_channels(x, items, device)
     y_bnd = torch.tensor(np.stack([it[6] for it in items]), device=device)
     d_n = torch.tensor(np.stack([it[13] for it in items]), device=device)
     return x, y_bnd, d_n

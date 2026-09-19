@@ -151,7 +151,8 @@ def build_model(args, device, log=print):
         log(f"no cached weights for {args.backbone}; the hub is unreachable here, so the "
             f"trunk will be randomly initialised")
 
-    kw = dict(backbone=args.backbone, in_chans=9, d=64, n_blocks=2,
+    n_in = 9 + (2 if args.pf_channels > 0 else 0) + (1 if args.sibling_sigma else 0)
+    kw = dict(backbone=args.backbone, in_chans=n_in, d=64, n_blocks=2,
               # make_trunk only allows stem_stride != 2 for EfficientNet; for ConvNeXt the
               # stem is retrofitted after construction instead (see anchor_convnext.py).
               stem_stride=2 if cnx else args.stem_stride,
@@ -188,7 +189,7 @@ def build_model(args, device, log=print):
     finally:
         timm.create_model = real_create
     if cnx:
-        retrofit_stem(model, in_chans=9, stride=args.convnext_stem_stride, log=log)
+        retrofit_stem(model, in_chans=n_in, stride=args.convnext_stem_stride, log=log)
     return model.to(device).to(memory_format=torch.channels_last)
 
 
@@ -210,6 +211,8 @@ def model_inputs(items, device, model):
     if getattr(model, "takes_items", False):
         return model.inputs_from_items(items, device)
     x, _ = items_to_x(items, device, model)
+    from anchor_pfchan import append_channels
+    x = append_channels(x, items, device)          # no-op unless --pf-channels was set
     return x.to(memory_format=torch.channels_last)
 
 
@@ -374,7 +377,8 @@ def train(args):
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    grid = set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft)
+    grid = set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft, pf_profiles=args.pf_channels,
+                    sib_sigma=args.sibling_sigma)
     log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols "
         f"(row {gd.ROW} ft, colw {gd.COLW} ft), state grid {gd.T // 4} bins of "
         f"{2 * args.win / (gd.T // 4):.1f} ft, stem_stride {args.stem_stride}, "
@@ -392,9 +396,13 @@ def train(args):
 
     cache = Path(args.cache) if args.cache else None
     wells = load_wells(Path(args.data), names, cache, log=log)
+    bank = None
     if args.sibling_w > 0:
         from anchor_sibling import apply_to_wells
-        apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
+        bank = apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
+    if args.sibling_sigma:
+        from anchor_sibling import attach_spread
+        attach_spread(wells, tr_names, names, bank=bank, bin_ft=args.sibling_bin, log=log)
     tr_wells = {n: wells[n] for n in tr_names}
     ho_wells = {n: wells[n] for n in ho_names}
     log(f"scored rows in holdout: {sum(len(eval_rows(w)) for w in ho_wells.values()):,}")
@@ -402,10 +410,16 @@ def train(args):
     aug = AugCfg(crop_prob=args.crop_prob, md_flip_prob=args.md_flip,
                  level_flip_prob=args.level_flip, level_shift_ft=args.level_shift,
                  md_phase=not args.no_md_phase, specaug_prob=args.specaug,
-                 synth_prob=args.synth_prob)
+                 synth_prob=args.synth_prob, far_anchor_prob=args.far_anchor)
+    groups = None
+    if args.synth_prob > 0:
+        from anchor_sibling import master_systems
+        groups = master_systems(wells, names)
+        log(f"synthesis: {len(set(groups.values()))} master systems available as geology "
+            f"donors, at synth_prob={args.synth_prob:g}")
     ds = AnchorWellDataset(tr_wells, tr_names, aug, ps_col=args.ps_col, seed=args.seed,
                            epoch_len=args.epoch_len or len(tr_names),
-                           pre_ps_label=args.pre_ps_label)
+                           pre_ps_label=args.pre_ps_label, groups=groups)
     dl = DataLoader(ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                     collate_fn=collate, drop_last=True, pin_memory=False,
                     persistent_workers=args.num_workers > 0,
@@ -625,6 +639,17 @@ def parse_args(argv=None):
     p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
                    help="effnet = the released EfficientNet-B0 trunk; separable = 1-D "
                         "encoders + matching volume (anchor_separable.py)")
+    p.add_argument("--far-anchor", type=float, default=0.0, metavar="P",
+                   help="with probability P, re-anchor early and extend the training window "
+                        "as far as the grid and the +-128 ft label cap allow.  Counters the "
+                        "sampler's bias toward near-anchor columns; 0 = original behaviour.")
+    p.add_argument("--pf-channels", type=int, default=0, metavar="N",
+                   help="add 2 particle-filter input channels (belief + spread), computed "
+                        "on the fly from N filter profiles.  0 = off.  Must match between "
+                        "training and evaluation: it changes the model's input width.")
+    p.add_argument("--sibling-sigma", action="store_true",
+                   help="add 1 channel of sibling disagreement per depth: how much wells in "
+                        "the same rock differ there, i.e. how much a GR match is worth")
     p.add_argument("--sibling-w", type=float, default=0.0,
                    help="blend the typewell channel with a sibling-lateral reference GR at this "
                         "weight (0 = typewell only, the default).  Siblings are TRAINING wells "

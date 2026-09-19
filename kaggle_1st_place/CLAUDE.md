@@ -595,3 +595,23 @@ the question (345x400 tokens).
 `cfg.target_stats` are hardcoded constants fitted on the full original training set, so
 they carry slight information about the holdout wells. Everything actually learned --
 weights, geo prior, checkpoint choice -- is split-safe.
+
+## PF channels and backbone size (added from the 2nd-place workspace)
+
+- The pipeline already implements 22 PF input channels (`PF_HEATMAP_CHANNELS` in
+  `seq_NN_data_prep.py`); `uses_pf_heatmap_channels(cfg)` just checks whether any is in
+  `unet_static_channels`. 0801_V2 uses none. The author's 0729_V3 and 0803_V2 did, and their
+  archived OOF was worse (5.536, 5.006 vs 4.8045) -- but those snapshots also differ by code
+  churn and, for 0803_V2, two geo channels, so it is not a clean ablation.
+- **Cache cost, measured:** 10.7 s/well at 4 workers, ~2.3 h for 773 wells, 0.04 GB,
+  numba warmup 8 s. A probe script must wrap its body in `if __name__ == "__main__":`
+  or the Windows `spawn` Pool hangs. Its summary on the first 4 wells: TVT RMSE 5.17
+  filtered / **3.80 FFBSi** -- 4 wells only, and the settings were tuned on all 773.
+- New `experiments/bilzard` entries: `pf_v1` (0801_V2 + `pf_particle_density_prob`,
+  `pf_prob_ffbsi`, the author's 0803_V2 additions and nothing else), `cnx_tiny`
+  (`convnext_tiny.in12k_ft_in1k_384`, the author's exact pretraining recipe), `cnx_base`
+  (`convnext_base.fb_in22k_ft_in1k_384`, nearest available). `unet_arch` is only a label the
+  builder validates ('convnext_small'); the network is `unet_timm_model_name`. tiny/base
+  weights are not cached and must be downloaded before `--offline-timm` will work. **tiny is now cached** (commit bac32564, 114.4 MB, checksum verified against the HF LFS sha256, fetched with urllib since `requests` fails TLS here); `cnx_tiny` built offline loads it exactly (backbone tensor diff 0.0, stage 3 = 9 blocks).
+- Size in this U-Net (400x345, fp16): nano 17.8M/54 GFLOP/21 ms, tiny 31.9M/82/22 ms,
+  small 53.6M/127/30 ms, base 94.8M/214/40 ms (batch 1, network only).

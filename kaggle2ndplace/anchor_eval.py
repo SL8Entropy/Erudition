@@ -66,6 +66,13 @@ def parse_args(argv=None):
                    help="must match the checkpoint's training config")
     p.add_argument("--arch", choices=["effnet", "separable"], default="effnet",
                    help="must match the checkpoint's training config")
+    p.add_argument("--pf-channels", type=int, default=0, metavar="N",
+                   help="add 2 particle-filter input channels (belief + spread), computed "
+                        "on the fly from N filter profiles.  0 = off.  Must match between "
+                        "training and evaluation: it changes the model's input width.")
+    p.add_argument("--sibling-sigma", action="store_true",
+                   help="add 1 channel of sibling disagreement per depth: how much wells in "
+                        "the same rock differ there, i.e. how much a GR match is worth")
     p.add_argument("--sibling-w", type=float, default=0.0,
                    help="sibling-lateral reference blend weight; must match the training run")
     p.add_argument("--sibling-bin", type=float, default=1.0)
@@ -92,7 +99,8 @@ def main(args):
     log(f"# {time.strftime('%Y-%m-%d %H:%M:%S')}  {' '.join(sys.argv)}")
 
     device = torch.device(args.device)
-    set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft)
+    set_grid(row=args.row, gr_prefilter_ft=args.gr_prefilter_ft, pf_profiles=args.pf_channels,
+                    sib_sigma=args.sibling_sigma)
     log(f"grid: {gd.T} rows x {gd.H + args.ps_col} cols (row {gd.ROW} ft), "
         f"stem_stride {args.stem_stride}, arch {args.arch}, "
         f"GR prefilter {args.gr_prefilter_ft:g} ft")
@@ -102,9 +110,13 @@ def main(args):
     tr_names, ho_names = split_wells(names, args.train_frac)
     log(f"holdout: {len(ho_names)} wells (first {ho_names[0]})")
     wells = load_wells(Path(args.data), names, Path(args.cache) if args.cache else None, log=log)
+    bank = None
     if args.sibling_w > 0:
         from anchor_sibling import apply_to_wells
-        apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
+        bank = apply_to_wells(wells, tr_names, names, args.sibling_w, args.sibling_bin, log=log)
+    if args.sibling_sigma:
+        from anchor_sibling import attach_spread
+        attach_spread(wells, tr_names, names, bank=bank, bin_ft=args.sibling_bin, log=log)
     ho_wells = {n: wells[n] for n in ho_names}
     log(f"scored rows: {sum(len(eval_rows(w)) for w in ho_wells.values()):,}")
 

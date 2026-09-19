@@ -148,6 +148,37 @@ class SiblingBank:
         out[cov] = num[cov] / den[cov]
         return out, cov, len(members)
 
+    def spread(self, name, tvt_query, min_wells=3):
+        """Disagreement *between* siblings at each depth, in GR units.
+
+        The mean sibling profile answers "what does this rock read here"; the spread answers
+        "how much do wells in this rock disagree here", which is a per-depth statement about
+        how much evidence a GR match at that depth is worth.  3rd place's sibling tables
+        carried a sigma alongside the bias for the same reason.
+
+        Note their warning, which we do not intend to repeat: sharpening a particle filter's
+        likelihood with this sigma failed on 5 of 5 profiles, because a broad likelihood was
+        doing implicit robustness work.  It is used here only as an input channel, never as
+        a likelihood.
+        """
+        tvt_query = np.asarray(tvt_query, dtype=np.float64)
+        members = [m for m in self.systems.get(self.groups.get(name, -1), []) if m != name]
+        if len(members) < min_wells:
+            return np.zeros(len(tvt_query)), np.zeros(len(tvt_query), bool)
+        n = np.zeros(len(tvt_query)); s1 = np.zeros(len(tvt_query)); s2 = np.zeros(len(tvt_query))
+        for m in members:
+            c, g, _ = self.by_well[m]
+            inside = (tvt_query >= c[0]) & (tvt_query <= c[-1])
+            if not inside.any():
+                continue
+            v = np.interp(tvt_query[inside], c, g)      # each sibling counts once, not per row
+            n[inside] += 1.0; s1[inside] += v; s2[inside] += v * v
+        cov = n >= min_wells
+        out = np.zeros(len(tvt_query))
+        with np.errstate(invalid="ignore"):
+            out[cov] = np.sqrt(np.maximum(s2[cov] / n[cov] - (s1[cov] / n[cov]) ** 2, 0.0))
+        return out, cov
+
     def n_siblings(self, name):
         return max(len([m for m in self.systems.get(self.groups.get(name, -1), []) if m != name]), 0)
 
@@ -179,4 +210,27 @@ def apply_to_wells(wells, train_names, all_names, weight, bin_ft=1.0, log=print)
         rows += int(cov.sum())
     log(f"sibling reference applied at weight {weight:.2f} to {touched}/{len(all_names)} wells "
         f"({rows / max(touched, 1):.0f} typewell samples blended per well)")
+    return bank
+
+
+def attach_spread(wells, train_names, all_names, bank=None, bin_ft=1.0, log=print):
+    """Store each well's sibling-disagreement profile on the well dict, for the sigma channel.
+
+    Kept as (tvt, sigma) on the well rather than resolved to levels here, because the level
+    axis depends on the sample's anchor and tvt_shift, which are not known until build time.
+    """
+    if bank is None:
+        bank = SiblingBank(bin_ft=bin_ft).fit(wells, train_names, all_names=all_names, log=log)
+    got = 0
+    for n in all_names:
+        w = wells[n]
+        tvt = w["tw_tvt"].astype(np.float64)
+        sig, cov = bank.spread(n, tvt)
+        if not cov.any():
+            continue
+        w["sib_sd_tvt"] = tvt.astype(np.float32)
+        w["sib_sd"] = np.where(cov, sig, 0.0).astype(np.float32)
+        got += 1
+    log(f"sibling spread attached to {got}/{len(all_names)} wells "
+        f"(median disagreement {np.median([np.median(wells[n]['sib_sd'][wells[n]['sib_sd'] > 0]) for n in all_names if 'sib_sd' in wells[n]]):.1f} GR)")
     return bank
