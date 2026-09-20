@@ -678,3 +678,111 @@ faster. "Tiny is better" is not supportable.
 distilled; the ConvNeXts use stronger ImageNet-12k pretraining). Weights cached (46.5 MB,
 checksum verified); built offline, 12.3M params, all 94 backbone weight tensors identical to
 the download, stages [2, 2, 6, 2]. 40 GFLOP / 20 ms in this U-Net.
+
+### More backbone candidates screened (2026-09-20)
+
+    fasternet_s            works: 35.9M / 98.2 GFLOP / 59.3 ms  -- fewer FLOPs than
+                           convnext_small yet 1.8x SLOWER here
+    mobileone_s3/s4        no: "4 stages vs 5 channel entries" (stem counted as a stage);
+                           a small adapter in _stage_channels_from_timm_model would fix it
+    efficientnet_b0,       no: do not expose ConvNeXt-style stages
+    tf_efficientnetv2_b0,
+    mobilenetv4_conv_medium
+    swin_tiny              no in the conv path -- but the author's `trf_unet` path already
+                           supports swin tiny/small/base; no trf recipe is registered in
+                           either fork (all 10 recipes are model_name='unet')
+    repvit_m1_1            no: does not accept drop_path_rate
+    FasterViT (NVIDIA)     not in timm, `fastervit` package not installed
+    CMT                    not in timm at all
+
+**FLOPs do not predict wall clock in this U-Net.** The patchify stem is skipped and the
+input is 400x345, so backbones run far above their design resolution: fasternet_s 98 GFLOP
+= 59 ms against convnext_small 127 GFLOP = 33 ms, and fastvit_sa12 40 GFLOP = 20 ms against
+convnext_tiny 82 GFLOP = 23 ms (half the FLOPs, 13% faster). Screen candidates by measured
+ms, never by GFLOP.
+
+### Where the U-Net's FLOPs actually are (measured, 400x345, ConvNeXt-small)
+
+    linear / channel mixing (block MLPs)   89.3 GFLOP   70.2%
+    other spatial convs (decoder, stem)    32.9 GFLOP   25.9%
+    1x1 convs                               3.2 GFLOP    2.5%
+    7x7 depthwise spatial kernels           1.9 GFLOP    1.5%
+    TOTAL                                 127.2 GFLOP
+
+ConvNeXt is already depthwise-separable, so its spatial mixing is **1.5% of compute**.
+Proposals to replace 2-D kernels with row+column 1-D convolutions therefore cannot cut 70%:
+the ceiling is ~1.5% plus about two thirds of the 25.9% decoder/stem convs, i.e. ~20%, and
+separable convs are often slower per FLOP (two passes, memory-bound). Cutting the 70% needs
+fewer channels or blocks -- which is what convnext_tiny (-35% FLOPs, no measurable loss) and
+fastvit_sa12 (-69%) do, while keeping pretrained weights.
+
+The 2nd-place workspace already tested the row/column idea end to end
+(`kaggle2ndplace/anchor_separable.py`: 1-D level encoder + 1-D MD encoder, outer-difference
+matching volume, separable 2-D pyramid at the same feature resolutions): **11.40 ft against a
+6.02-6.57 control**, at 4.82 vs 7.9 GFLOP. Confound stated there: no ImageNet initialisation.
+
+### Third backbone screen: MobileOne, HRNet, EfficientNet-B3/B4 (2026-09-20)
+
+Encoder only, `features_only`, in_chans=16, 400x345, fp16, batch 1:
+
+    convnext_small        49.5M   46.7 GFLOP   13.8 ms
+    convnext_tiny         27.8M   24.1 GFLOP    7.2 ms
+    fastvit_sa12          10.4M    9.0 GFLOP    9.3 ms
+    mobileone_s1           3.6M    5.2 GFLOP    7.1 ms  ->  reparameterised  5.1 GFLOP  1.9 ms
+    mobileone_s2           5.8M    7.9 GFLOP    7.5 ms  ->  reparameterised  7.8 GFLOP  2.6 ms
+    mobileone_s4          12.9M   17.3 GFLOP   10.5 ms
+    efficientnet_b3       10.1M    5.6 GFLOP    9.5 ms
+    efficientnet_b4       16.7M    8.7 GFLOP   11.6 ms
+    tf_efficientnetv2_s   19.9M   16.1 GFLOP   14.0 ms
+    hrnet_w18, hrnet_w18_small_v2   FAIL at 400x345 (fusion size mismatch; needs padding)
+
+**Reparameterisation does not change FLOPs (5.2 -> 5.1) but cuts wall clock 3.7x** (7.1 ->
+1.9 ms): it removes multi-branch memory traffic, which is what actually costs time here.
+
+**EfficientNet-B3/B4 are slower than convnext_tiny** (9.5 / 11.6 vs 7.2 ms) at a quarter of
+the FLOPs -- the claim that they run faster on this GPU is measurably wrong, as is the claim
+that ConvNeXt's 7x7 depthwise kernels are the bandwidth problem (they are 1.5% of compute).
+
+**Backbone share of the real model** (timed in place with CUDA events, whole `PretrainedUNet2d`):
+
+    convnext_small  29.1 ms total | stages 19.8 ms (68%) | stem+decoder+heads 9.4 ms
+    convnext_tiny   20.4 ms total | stages 11.2 ms (55%) | stem+decoder+heads 9.2 ms
+
+In-model stages cost ~1.55x their standalone figure, because the pipeline skips patchify and
+runs the backbone at higher resolution. A reparameterised MobileOne encoder would plausibly
+land near 3 ms in-model, i.e. ~12 ms total against tiny's 20.4 -- a real ~40% saving, but it
+needs a stage/stem adapter, and the nearest tested relative (fastvit_sa12, same Apple reparam
+family, 3x the parameters) lost 0.16-0.31 ft.
+
+Input-channel pruning is not worth it: 1x1 convs are 2.5% of compute, and the author's own
+0801_V1 -> V2 differ by exactly one input channel for 5.1668 -> 4.8045 OOF.
+
+### `cnx_mobileone` built (2026-09-20)
+
+`experiments/bilzard`, MobileOne-S1. Two things had to be handled or the comparison would be rigged:
+
+1. **Channel list includes the stem.** `feature_info` is `[64, 96, 192, 512, 1280]` for 4
+   stages, and unlike ConvNeXt (stem 96 -> stage0 in 96 -> out 96) MobileOne's stage 0 changes
+   width (in 64 -> out 96). `seq_NN_pretrained_unet.py` now separates *what feeds stage 0*
+   (`backbone_in_ch`) from *what each stage emits* (`stage_channels`), and accepts a list of
+   `len(stages) + 1`. ConvNeXt/FastViT behaviour is unchanged (the extra branch only triggers
+   on the 5-entry case).
+2. **MobileOne's stage 0 downsamples; ConvNeXt's does not.** Left alone every feature map would
+   be one level coarser, which the 2:1 resolution rule says costs real accuracy. The recipe sets
+   `unet_stem_stride=(1, 2)` instead of `(2, 4)`, handing that factor of two to stage 0.
+   Verified: stage maps land on ConvNeXt's geometry, (173,100) (87,50) (44,25) (22,13) against
+   tiny's (173,100) (86,50) (43,25) (21,12).
+
+Measured in the real U-Net, 16ch 345x400, fp16, batch 1:
+
+    cnx_tiny                       31.9M   21.9 ms
+    cnx_mobileone (branched)       10.2M   18.6 ms
+    cnx_mobileone (reparameterised) 10.2M  14.0 ms   -36% against tiny
+
+**Reparameterisation is exact** -- relative output difference 5.2e-07 over the whole stage
+stack. (Absolute differences are useless here: an untrained MobileOne's activations reach
+4.9e+08, so a 2.6e+02 absolute gap is 5e-07 relative. A first check that compared absolute
+values wrongly called it broken.) Accuracy is therefore identical branched or reparameterised;
+reparameterise only for deployment speed.
+
+Weights `mobileone_s1.apple_in1k` (19.6 MB) are **not yet downloaded**.

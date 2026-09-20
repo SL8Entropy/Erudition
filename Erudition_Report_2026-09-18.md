@@ -388,9 +388,19 @@ Measured on this laptop's GPU, for one well at a time, counting the network only
   | average over rounds 100–150 | 5.16 | 5.09 |
 
   So: no measurable difference. Tiny's training was also steadier.
-- **FastViT-SA12** is the next cheaper candidate: 12.3M numbers, 40 GFLOP (a third of small),
-  20 ms. It is set up and its weights are downloaded, but it hasn't been trained yet (§9.1). Its
-  pretraining is weaker than the ConvNeXts' (ImageNet-1k vs 12k).
+- **FastViT-SA12 was tested on 20 September, and it is worse.** 40 GFLOP, 20 ms, and it trained
+  in 2.1 hours, but it lost on every measure: reported 5.21 vs tiny's 4.90, last checkpoint 5.30
+  vs 5.14, late average 5.32 vs 5.09. The acceptance test rejected it against both other models
+  (only 6% of resampling checks favoured it over tiny). Caveats: its pretraining used a smaller
+  image collection than the ConvNeXts', and a 0.2–0.3 ft gap is near the limit of what this test
+  can resolve.
+- **So the cost ladder stops at ConvNeXt-tiny.** Halving the arithmetic from tiny to FastViT
+  (82 → 40 GFLOP) bought only ~13% real speed (23 → 20 ms), because at this image size the work
+  is limited by memory traffic, not arithmetic. Paying 0.2 ft for 3 ms is a bad trade.
+- **A related measurement, for "separable" or row/column proposals:** ConvNeXt spends just
+  **1.5%** of its computing on 2-D spatial filtering, and 70% on mixing channels. Replacing the
+  spatial filters cannot save much. We tested that design directly in the AnchorCNN: 11.4 ft
+  against a 6.0–6.6 baseline.
 - **Other drop-in replacements** tested for fit (build and run only): ConvNeXt-V2 tiny/nano,
   InceptionNeXt-tiny, ConvFormer-S18, CAFormer-S18. MambaOut, EfficientNetV2, RegNet, RDNet and
   Hiera would need code changes. Real Mamba/Samba models can't run on this Windows setup. The
@@ -401,8 +411,9 @@ Measured on this laptop's GPU, for one well at a time, counting the network only
 - **Putting a ConvNeXt inside the AnchorCNN** would cost about 15× the AnchorCNN's normal
   computing (122 GFLOP).
 
-**Recommendation:** ConvNeXt-tiny, one pass, no blend, no averaging. If FastViT-SA12 also comes
-in with no measurable loss, it would cut the computing roughly in half again.
+**Recommendation: ConvNeXt-tiny, one pass, no blend, no averaging.** A third less computing and
+38% faster training than the original, for no accuracy we can measure. Cheaper backbones than
+tiny have been tried and cost accuracy without buying much speed.
 
 ## 7. Caveats that apply to the results
 
@@ -477,21 +488,10 @@ in with no measurable loss, it would cut the computing roughly in half again.
 
 ### 9.1 Runs waiting, most important first
 
-**1) FastViT-SA12.** The next rung down in cost after ConvNeXt-tiny, which is done (§6). About
-3 hours; the weights are downloaded and checked. Run from `kaggle_1st_place\solution`:
-```
-python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name cnx_fastvit --epochs 150 --output-dir results/cnx_fastvit_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
-```
-Then compare using the **unpicked** scores, not just the reported one:
-```
-python seq_NN_honest_curve.py results/0801_V2_ep150 results/cnx_tiny_ep150 results/cnx_fastvit_ep150
-```
-How to read it, using the "last" and "late avg" columns against tiny (5.14 / 5.09):
-- within ~0.1–0.15 ft on both: as good as we can measure, at about half tiny's computing
-- clearly worse on both: the cheaper design (or its weaker pretraining) costs accuracy
-- mixed: needs a second run
+The two cost runs that used to head this list (ConvNeXt-tiny, FastViT) are finished; see §6.
+The rig question is settled, so the remaining runs are about accuracy.
 
-**2) AnchorCNN with synthetic data, done properly.** The first attempt was flawed (§7.1). This
+**1) AnchorCNN with synthetic data, done properly.** The first attempt was flawed (§7.1). This
 version changes only one thing (synthetic data on), with the generator bug fixed and the same
 number of training steps as its comparison run. About 1 h 15. Run from `kaggle2ndplace`:
 ```
@@ -507,7 +507,7 @@ from round 60 onward (against the plain runs' 6.26–6.38):
   the end; stopping earlier needs a rule that doesn't peek at the test wells
 - no better on either: the gap to the ConvNeXt really is the model design
 
-**3) Tracker inputs, third seed.** Confirms or rejects the best AnchorCNN result. About 1 h 15.
+**2) Tracker inputs, third seed.** Confirms or rejects the best AnchorCNN result. About 1 h 15.
 Run from `kaggle2ndplace`:
 ```
 set "PYTHONHASHSEED=0"

@@ -495,16 +495,7 @@ class PretrainedUNet2d(nn.Module):
         if len(stages) != 4:
             raise ValueError(f"{self.timm_model_name!r} expected 4 down stages, got {len(stages)}")
         stage_channels = _stage_channels_from_timm_model(backbone, backbone_name)
-        # ConvNeXt lists one entry per stage and its stem output equals stage 0's input, so
-        # the same number served both purposes.  Other families (MobileOne, and anything whose
-        # feature_info includes the stem) list stem + stages, and their stage 0 changes width.
-        # Keep the two ideas separate: what feeds stage 0, and what each stage emits.
-        if len(stage_channels) == len(stages) + 1:
-            backbone_in_ch = int(stage_channels[0])
-            stage_channels = tuple(stage_channels[1:])
-        elif len(stage_channels) == len(stages):
-            backbone_in_ch = int(stage_channels[0])
-        else:
+        if len(stage_channels) != len(stages):
             raise ValueError(
                 f"{self.timm_model_name!r} stage/channel mismatch: "
                 f"{len(stages)} stages vs {len(stage_channels)} channel entries"
@@ -529,20 +520,20 @@ class PretrainedUNet2d(nn.Module):
         )
         if self.stem_stride == (1, 1):
             self.stem_down = nn.Identity()
-            self.to_backbone = nn.Conv2d(self.emb_dim, backbone_in_ch, kernel_size=1, bias=True)
+            self.to_backbone = nn.Conv2d(self.emb_dim, stage_channels[0], kernel_size=1, bias=True)
         elif self.stem_down_mode == "pool":
             self.stem_down = nn.AvgPool2d(
                 kernel_size=self.stem_stride,
                 stride=self.stem_stride,
                 ceil_mode=True,
             )
-            self.to_backbone = nn.Conv2d(self.emb_dim, backbone_in_ch, kernel_size=1, bias=True)
+            self.to_backbone = nn.Conv2d(self.emb_dim, stage_channels[0], kernel_size=1, bias=True)
         else:
             self.stem_down = nn.Identity()
             down_kernel_size, down_padding = _stride_conv_kernel_and_padding(self.stem_stride)
             self.to_backbone = nn.Conv2d(
                 self.emb_dim,
-                backbone_in_ch,
+                stage_channels[0],
                 kernel_size=down_kernel_size,
                 stride=self.stem_stride,
                 padding=down_padding,

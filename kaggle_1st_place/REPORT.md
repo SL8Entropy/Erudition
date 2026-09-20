@@ -462,3 +462,64 @@ python seq_NN_robust_compare.py --base results/0801_V2_ep150 --treat results/rb_
 Timing on the RTX 3050: ~110 s/epoch, so 150 epochs is about 5 hours. Training is
 GPU-bound — the data pipeline sits idle ~92% of the time, and the usual speed
 knobs (bfloat16, channels-last, TF32, cuDNN autotuning) are already enabled.
+
+---
+
+## 10. Making the model cheaper: ConvNeXt-tiny and FastViT (September 2026)
+
+The question here was not accuracy. It was whether a smaller, cheaper network could do the
+same job, so the model could run on a drilling rig without a large GPU.
+
+### First, a problem with how we read scores
+
+While checking these runs, we found that **every score this pipeline reports is flattering.**
+During training it checks its progress on the 155 test wells, and at the end it keeps whichever
+checkpoint scored best on them. Choosing by the answer makes the final number look better than
+the model really is. Measured across runs, the effect is about **0.15 ft**.
+
+Comparing our runs with each other is still fair, because they were all scored the same way.
+But the absolute numbers are optimistic, and the earlier note in `CLAUDE.md` saying checkpoint
+choice was safe has been corrected.
+
+`seq_NN_honest_curve.py` now reads a run's log and reports the checkpoints nobody chose: the
+last one, and the average over the final third of training. Those are the numbers below.
+
+### The results
+
+Three backbones, same recipe, 150 training rounds each (lower is better, feet):
+
+| backbone | compute | reported | last checkpoint | average, rounds 100–150 | training time |
+|---|---|---|---|---|---|
+| ConvNeXt-small (original) | 127 GFLOP | 4.98 | **5.09** | 5.16 | 5.2 h |
+| **ConvNeXt-tiny** | 82 GFLOP | 4.90 | 5.14 | **5.09** | 3.2 h |
+| FastViT-SA12 | 40 GFLOP | 5.21 | 5.30 | 5.32 | 2.1 h |
+
+**ConvNeXt-tiny: as good as the original.** The two honest measures disagree about which is
+ahead, and both gaps are under 0.1 ft, which is smaller than this test can resolve. So tiny
+matches the original on accuracy while using a third less computing and training 38% faster.
+
+**FastViT-SA12: worse, consistently.** It lost on all four measures, by 0.16–0.31 ft, and the
+acceptance test rejected it against both other models (only 6% of resampling checks favoured it
+over tiny). Two honest caveats: its pretraining was on a smaller image collection than the
+ConvNeXts', so some of the loss may come from that rather than the design; and a 0.2–0.3 ft gap
+is near the edge of what 155 wells can measure.
+
+### What this means in practice
+
+The cost ladder stops at ConvNeXt-tiny.
+
+Going from tiny to FastViT halves the arithmetic (82 → 40 GFLOP), but the model only runs about
+13% faster in real time (23 → 20 ms per well), because at this image size the work is limited by
+memory traffic rather than arithmetic. **Paying 0.2 ft of accuracy for 3 milliseconds is a bad
+trade.** For the same reason, FasterNet used fewer operations than ConvNeXt-small and ran nearly
+twice as slow.
+
+Related measurement, for anyone tempted by "separable" or row/column designs: ConvNeXt spends
+only **1.5%** of its computing on 2-D spatial filtering. 70% goes on mixing channels. Replacing
+the spatial filters therefore cannot save much, whatever the design. (The 2nd-place workspace
+tested that idea directly: 11.4 ft against a 6.0–6.6 baseline.)
+
+### Recommendation
+
+Use **ConvNeXt-tiny**, one pass, no ensembling and no test-time averaging. That is a third less
+computing and 38% faster training than the original, for no accuracy we can measure.

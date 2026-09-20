@@ -3172,23 +3172,6 @@ def make_bilzard_cfgs():
         c.refresh()
         return c
 
-    def _mobileone(name="hf_hub:timm/mobileone_s1.apple_in1k"):
-        """MobileOne, whose training-time branches collapse into plain 3x3 convs for inference.
-
-        Two things differ from ConvNeXt and both must be handled or the comparison is rigged.
-        Its feature_info lists the stem as well as the four stages, and its stage 0 *does*
-        downsample where ConvNeXt's does not -- left alone, every feature map would come out
-        one level coarser, which the resolution ablation measured as a real loss.  Dropping the
-        pipeline's own stem stride from (2, 4) to (1, 2) hands that factor of two to stage 0, so
-        the pyramid lands on exactly the ConvNeXt geometry (MD 345->173->87->44->22, level
-        400->100->50->25->13) and the 2:1 ratio to the output grid is preserved.
-        """
-        c = deepcopy(base)
-        c.unet_cfg = dict(c.unet_cfg, unet_arch="convnext_small", unet_timm_model_name=name,
-                          unet_stem_stride=(1, 2))
-        c.refresh()
-        return c
-
     return [
         ("rb_v1_neighbor", neighbor_cfg),
         ("rb_v2_synth", synth_cfg),
@@ -3201,7 +3184,6 @@ def make_bilzard_cfgs():
         # backbone that drops into this U-Net unchanged.  Apple's distilled ImageNet-1k
         # weights; note the ConvNeXts start from ImageNet-12k, a stronger pretraining.
         ("cnx_fastvit", _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
-        ("cnx_mobileone", _mobileone()),
     ]
 
 
