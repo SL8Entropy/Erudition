@@ -1071,3 +1071,31 @@ tiny + its own FastViT student (4.766) is the best pair found, at ~44 ms/well ag
 
 - New recipe `cnx_fastvit_kd_small`: FastViT taught by `0801_V2_ep150` alone. It is verified to
   resolve and load its teacher.
+
+### `cnx_fastvit_kd_small_ep150`: FastViT taught by ConvNeXt-small (2026-09-21) -- best single model
+
+Trained 16:46-19:35 (2 h 49 min). Holdout pooled **4.8402** (pre-SG 4.8718), test-picked at epoch 80.
+
+    run                     picked   last     late avg  sd     pooled(reported)
+    0801_V2 (small, teacher) 5.021   5.091    5.163     0.118  4.9785
+    cnx_fastvit (alone)      5.252   5.303    5.319     0.058  5.2132
+    cnx_fastvit_kd (by tiny) 4.959   5.119    5.110     0.077  4.9292
+    cnx_fastvit_kd_small     4.872   4.924    4.968     0.040  4.8402
+    cnx_tiny                 4.946   5.144    5.093     0.066  4.9044
+
+- **Student vs FastViT alone:** -0.37 ft, k*=35, bootstrap 95.2%. ACCEPT.
+- **Student vs its teacher (small):** -0.14 pooled, -0.17 last, -0.20 late avg. Yet k*=8 and
+  bootstrap 73.2%, so REJECT as "better". It wins 77 of 155 wells. The defensible claim is
+  "matches the teacher" at FastViT cost.
+- **Student of small vs student of tiny:** -0.09, k*=4, 67%. REJECT. No measurable difference.
+- **Averages:**
+  - small + student 4.7510 (corr 0.874) vs small: k*=32, 97.1%, ACCEPT.
+  - tiny + student 4.6932 (corr 0.857) vs tiny: k*=19, 98.2%, ACCEPT. **Best pair.**
+  - The two FastViT students together: 4.8031 (corr 0.935).
+- U-Net cost (idle GPU, bf16): small 37.5 ms, FastViT 22.3 ms, so 41% less (18.3 ms with fp16 + CUDA graph).
+- Seed-repeat recipes for the paper: `cnx_fastvit_s{11,23}`, `cnx_fastvit_kd_small_s{11,23}`
+  (teacher stays the seed-7 `0801_V2_ep150`), and `small_s{11,23}` (base recipe = `0801_V2`).
+  The holdout split is a fixed sorted 80/20 cut (`split_wells`), independent of `cfg.seed`.
+- Report updated (§1, 4.1, 4.2, 4.10, 9.1, 9.5). The paper framing is "FastViT taught by
+  ConvNeXt-small matches its teacher at ~40% less inference". The claim over FastViT alone passes
+  on one seed; the claim over the teacher does not.

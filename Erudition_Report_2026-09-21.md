@@ -43,21 +43,29 @@ open and how to carry on.
   while needing about a third less computing and training 38% faster (§6). Two cheaper backbones
   were then tested and the ladder stops here: FastViT lost 0.3 ft and MobileOne lost 1.6 ft. The
   accuracy-versus-size curve has a knee and tiny sits on it (§6).
-- **Newest and most promising: "teaching" a cheaper model works here.** FastViT on its own scored
+- **Newest result, and the one a paper can be built on: a cheap model taught by ConvNeXt-small
+  matches or beats its teacher.** FastViT alone scored 5.21. Taught by ConvNeXt-small, it scored
+  **4.84, the best single model we have**, against its teacher's 4.98, while running in ~41% less
+  time (22 vs 37.5 ms for the network). The gain over FastViT alone passes the "is it real?"
+  check. The gain over the teacher does not (the student wins 77 of 155 wells), so the honest
+  claim is **"as accurate as the teacher, at 40% less cost"**. This is one run each; a paper needs
+  repeats (§9.5).
+- **The first teaching result:** FastViT on its own scored
   5.21. Trained to imitate ConvNeXt-tiny's predictions ("knowledge distillation"), it scored
   **4.93**, closing about 90% of the gap to tiny (4.90). This is one run, so it is promising
   rather than proven, but it is the first idea in a long while to do clearly what it was meant to (§4.10).
 - **Averaging two ConvNeXts is the most reliable gain we have found: 4.78 ft** (small + tiny,
   0.13 ft better than tiny alone, and it passed the "is it real?" check convincingly). It doubles
   the inference cost, so the plan is to *teach* that pair's knowledge to one cheap model rather
-  than deploy two (§4.10, §9.1). **Best pair so far: tiny + the taught FastViT, 4.77 ft,** which
-  is also cheaper than small + tiny.
+  than deploy two (§4.10, §9.1). **Best pair so far: tiny + the FastViT taught by small,
+  4.69 ft** (passes the check, 98% of resamples agree), at about the cost of small alone.
 - **Inference speed:** the model already uses reduced-precision arithmetic (AMP). Switching to
   full half-precision weights saves a further ~16% for free. Pruning the decoder or installing
   TensorRT would save little: the network is only about a third of the total time per well (§6.3).
-- **What could still change the rig recommendation:** a distilled cheaper model (ConvNeXt-nano
-  or FastViT) that matches tiny. Those runs are built and waiting (§9.1). Everything else left on
-  the list is for completeness or a write-up (§9).
+- **This changes the rig recommendation:** the FastViT taught by small (4.84, ~22 ms) is both
+  more accurate and slightly faster than ConvNeXt-tiny alone (4.90, ~25 ms). Two caveats: one
+  seed, and the gap to tiny is within noise. So the recommendation is now "**the taught FastViT,
+  once a second seed confirms it**; tiny until then" (§9.1).
 - **Correction to all ConvNeXt scores:** the 1st-place code picks the checkpoint that scores best
   on the test wells, so its reported numbers are about 0.15 ft flattering (§7.7). Comparisons
   between ConvNeXt runs are still fair, because they were all picked the same way.
@@ -227,6 +235,9 @@ programming); and seismic horizon tracking, which is the same problem in the sam
 | **Average of ConvNeXt-tiny + the taught FastViT** | **4.77** | **the best pair found**, and cheaper than small + tiny (~44 vs ~52 ms) (§4.10) |
 | Average of ConvNeXt-small + FastViT | 4.90 | no real gain; failed the "is it real?" check |
 | Average of ConvNeXt-small + the taught FastViT | 4.82 | passed the check (98% of resamples agree) |
+| **FastViT-SA12 taught by ConvNeXt-small**, 150 rounds | **4.84** | **best single model**; one run; ~41% cheaper than its teacher (§4.10) |
+| Average of ConvNeXt-small + the FastViT it taught | 4.75 | passes the check (97%) |
+| **Average of ConvNeXt-tiny + the FastViT taught by small** | **4.69** | **best overall**; passes the check (98%) |
 | ConvNeXt + AnchorCNN, one fixed weight | **4.85** | best overall; 5–6× slower |
 | Our particle filter (best version) | ~12.0 | a tracker, not a learned model |
 | The 1st-place author's particle filter | 7.35 | much better tracker than ours |
@@ -247,6 +258,8 @@ possible with far more computing.
 | **Blending ConvNeXt + AnchorCNN with one weight** | 4.94 → 4.85 ft | Real but tiny, below what the test can resolve, and 5–6× slower |
 | **Averaging ConvNeXt-tiny + the FastViT it taught** | 4.90 → 4.77 ft, at ~44 ms per well | Good: the gain survives removing 31 wells, and 90% of resamples agree. The best pair found, and cheaper than small + tiny |
 | **Averaging ConvNeXt-small + the taught FastViT** | 4.98 → 4.82 ft | Good: survives removing 54 wells, and 98% of resamples agree |
+| **Teaching FastViT with ConvNeXt-small** | 5.21 → 4.84 ft (teacher: 4.98). Unpicked: last 5.30 → 4.92, late average 5.32 → 4.97 | vs FastViT alone: good (survives removing 35 wells, 95%). vs its teacher: *as good*, not provably better (77 of 155 wells) |
+| **Averaging ConvNeXt-tiny + the FastViT taught by small** | 4.90 → 4.69 ft | Good: survives removing 19 wells, 98% of resamples agree |
 | **Removing a repeated computation** in the tracker inputs | 17× faster, identical results (checked to 0.000 ft) | Solid |
 | **Averaging ConvNeXt-small + ConvNeXt-tiny** | 4.90 → 4.78 ft | Good: the gain survives removing the 67 wells that contribute most, and 91% of resampling checks agree |
 | **Teaching FastViT to imitate ConvNeXt-tiny** (distillation) | 5.21 → 4.93 ft; unpicked checkpoints agree (last 5.30 → 5.12, late average 5.32 → 5.11) | Promising: one run, but every way of scoring it points the same way |
@@ -428,7 +441,7 @@ the student. Here, we first checked that each teacher really was better.
 | **FastViT** | ConvNeXt-tiny | **finished** | **5.21 → 4.93** (tiny: 4.90). Unpicked: last 5.30 → 5.12, late average 5.32 → 5.11. About 90% of the gap closed. |
 | ConvNeXt-tiny | small + tiny average | built, waiting | can one tiny model keep the 0.13 ft averaging gain? |
 | FastViT | small + tiny average | built, waiting | does a stronger teacher help further? |
-| FastViT | ConvNeXt-small | built, waiting | a partner for tiny that makes different mistakes? |
+| **FastViT** | **ConvNeXt-small** | **finished** | **5.21 → 4.84**, beating its teacher's 4.98 on the headline score and on both unpicked measures (last 5.09 → 4.92, late average 5.16 → 4.97). See below. |
 | **ConvNeXt-nano** | small + tiny average | built, waiting | the most promising: nano is the fastest backbone that fits (§6.1) |
 | InceptionNeXt-tiny | ConvNeXt-small | built, waiting | weak case: small is no better than tiny on unpicked checkpoints, and InceptionNeXt is slower than tiny |
 
@@ -437,8 +450,31 @@ the student. Here, we first checked that each teacher really was better.
   0.84 to 0.88. But it became so much more accurate on its own (5.21 → 4.93) that tiny plus its
   own student (4.77) is the best pair found. It is also cheaper than small + tiny, because FastViT
   is the cheaper second model.
-- **Built next:** FastViT taught by ConvNeXt-small (`cnx_fastvit_kd_small`). A student of small
-  should share fewer mistakes with tiny, which could make it an even better partner for tiny.
+- **FastViT taught by ConvNeXt-small: the student matches its teacher.**
+
+  | | teacher: ConvNeXt-small | FastViT alone | **FastViT taught by small** |
+  |---|---|---|---|
+  | reported score (picked checkpoint) | 4.98 | 5.21 | **4.84** |
+  | last checkpoint (unpicked) | 5.09 | 5.30 | **4.92** |
+  | average over rounds 100–150 | 5.16 | 5.32 | **4.97** |
+  | wobble between rounds (sd) | 0.12 | 0.06 | **0.04** |
+  | network time per well | 37.5 ms | 22.3 ms | 22.3 ms |
+
+  - **vs FastViT alone (−0.37 ft):** passes the "is it real?" check. The gain survives removing
+    the 35 most influential wells, and 95% of resamples agree.
+  - **vs its teacher (−0.14 ft):** every score favours the student, but the check does not pass.
+    The gain disappears after removing 8 wells, only 73% of resamples agree, and the student is
+    better on 77 of 155 wells, which is exactly half. Honest claim: **the student is as accurate
+    as its teacher, at about 40% less inference time.**
+  - **Why a student can match or beat its teacher:** imitating the teacher's full opinion about
+    every depth is a gentler, smoother target than the single right answer alone. It acts as a
+    guide that keeps the student from memorising the 618 training wells. The student's training
+    was also the steadiest of any run (round-to-round wobble 0.04 ft).
+  - **Teacher choice (small vs tiny) made no measurable difference:** 4.84 vs 4.93, and the check
+    fails (67%).
+  - **As an averaging partner it is the best we have found:** tiny + this student reached
+    **4.69** (passes, 98%), and small + this student reached 4.75 (passes, 97%). As predicted,
+    it shares fewer mistakes with tiny (0.86) than tiny's own student does (0.88).
 - **Using DINOv2 as the teacher was considered and rejected.** It is not trained for this task.
   It would first need an adapter, a padded input and a full training run on the same 618 wells.
   Its coarse single-scale view (25×29 positions) would likely make it *worse* than tiny, and a
@@ -764,11 +800,23 @@ How to read them: a taught model counts as matching tiny if its last checkpoint 
 average are both within about 0.1 ft of tiny's (5.14 / 5.09). One run each, so a result near the
 line needs a second seed before it decides anything.
 
-c2) FastViT taught by ConvNeXt-small. Afterwards, average it with tiny and compare with
-tiny + taught-by-tiny FastViT (4.77):
+c2) **Done** (`results/cnx_fastvit_kd_small_ep150`, 4.84; §4.10). **Next: repeat it and its
+comparison run with new random seeds** (the paper needs at least three of each, §9.5). The
+original command, for reference:
 ```
 python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name cnx_fastvit_kd_small --epochs 150 --output-dir results/cnx_fastvit_kd_small_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
 ```
+
+c3) **Repeats for the paper** (recipes built; the seed is the only change, and the test wells
+stay the same). The two FastViT pairs matter most: about 2 h for FastViT alone and about 3 h for
+the taught one. The teacher repeats are optional (~5 h each) and show how much the teacher itself
+varies. Replace `NAME` in the command below with each of these:
+`cnx_fastvit_s11`, `cnx_fastvit_kd_small_s11`, `cnx_fastvit_s23`, `cnx_fastvit_kd_small_s23`,
+then optionally `small_s11`, `small_s23`.
+```
+python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name NAME --epochs 150 --output-dir results/NAME_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+```
+The students keep the original seed-7 ConvNeXt-small as their teacher.
 
 **0b) Free speed-up, not yet done:** make the scoring script store the model in fp16 (keeping the
 normalisation layers at 32-bit, §6.3), and check the test score doesn't move.
@@ -858,9 +906,41 @@ that run tests three *refinements* worth about 0.1 ft — below what 155 wells c
 
 ### 9.5 Before writing a paper
 
-A paper about **what didn't work, and why the test can't tell**, is realistic, for example at a
-workshop that welcomes negative results or in an applied geoscience journal. A paper claiming
-"this is the best possible" is not, because others scored better with more computing.
+**The strongest paper now: "a cheap student taught by ConvNeXt-small matches its teacher at 40%
+less cost."** One clean story, with the negative results as supporting context:
+
+| | error (ft) | network time | parameters |
+|---|---|---|---|
+| ConvNeXt-small (the 1st-place model's network; teacher) | 4.98 | 37.5 ms | 53.6 M |
+| FastViT-SA12 alone | 5.21 | 22.3 ms | 12.3 M |
+| **FastViT-SA12 taught by ConvNeXt-small** | **4.84** | **22.3 ms** | **12.3 M** |
+
+Why it is a sound paper topic:
+- It is practical: rig computers are limited, and this is 4× fewer parameters and ~1.7× faster
+  for no accuracy loss.
+- The gain over the untaught cheap model (0.37 ft) is large enough to pass our check on one run.
+- The negative results explain *why* this is the right route: bigger models don't help, because
+  the data runs out before the model size does (§6). Cheaper models lose accuracy on their own
+  (§6), and averaging or blending cost 2–6× the inference (§4.7, §4.10).
+
+**Leaving ConvNeXt-tiny out is fine.** Including it doesn't hurt the story: the taught FastViT
+(4.84, 22 ms) is at least as good as tiny (4.90, 25 ms), and a reviewer who asks "why not just a
+smaller ConvNeXt?" can be answered with that row. Leaving it out entirely would invite that question.
+
+What is needed before submitting:
+- [ ] **Repeats:** at least 3 seeds each of the teacher, FastViT alone and the taught FastViT.
+      One run can't separate a 0.14 ft gap from luck (§5.1). Budget: ~6 runs × ~3 h.
+- [ ] **Unpicked scores as the headline** (last checkpoint or late average), because the reported
+      numbers pick the checkpoint on the test wells (§7.7).
+- [ ] **Small ablations:** teaching strength (weight 0.5 / 1 / 2) and temperature (1 / 2 / 4).
+      Both are untuned at 1 and 2.
+- [ ] **Full-pipeline timing,** not only the network (the network is ~1/3 of time per well, §6.3).
+- [ ] State plainly that knowledge distillation itself is a standard method. The contribution is
+      showing it works on this task with only 618 training wells, where a student matches a teacher 4× its size.
+
+A second, smaller paper about **what didn't work, and why the test can't tell**, is also
+realistic, for example at a workshop that welcomes negative results. A paper claiming "this is
+the best possible" is not, because others scored better with more computing.
 
 - [ ] Check the data licence: Kaggle competition data often can't be used outside the competition
 - [ ] Credit Ruby (1st place) and Bilzard (2nd place) clearly, plus the 3rd, 8th and 22nd-place write-ups

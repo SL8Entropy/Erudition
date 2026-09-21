@@ -3191,10 +3191,6 @@ def make_bilzard_cfgs():
         c.distill_temperature = float(temperature)
         return c
 
-    def _seeded(c, seed):
-        c.seed = int(seed)
-        return c
-
     def _tiny_synth(src):
         c = deepcopy(src)
         c.unet_cfg = dict(c.unet_cfg, unet_arch="convnext_small",
@@ -3259,17 +3255,6 @@ def make_bilzard_cfgs():
         # different mistakes from tiny, and tiny + (student of tiny) already reached 4.766.
         ("cnx_fastvit_kd_small", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
                                          teachers=["results/0801_V2_ep150"])),
-        # Seed repeats for the paper comparison (teacher small / FastViT alone / FastViT taught by
-        # small).  The originals ran at the default seed 7; the holdout split is a fixed sorted
-        # 80/20 cut, so only training randomness changes.  The teacher stays the seed-7 small run.
-        *[(f"{name}_s{seed}", _seeded(make(), seed))
-          for seed in (11, 23)
-          for name, make in (
-              ("cnx_fastvit", lambda: _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
-              ("cnx_fastvit_kd_small", lambda: _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
-                                                       teachers=["results/0801_V2_ep150"])),
-              ("small", lambda: deepcopy(base)),
-          )],
         # InceptionNeXt-tiny (28.1M in the U-Net, fits unchanged) taught by ConvNeXt-small alone.
         # Only ImageNet-1k weights exist for it, a weaker start than the ConvNeXts' in12k, which is
         # the gap the teacher is meant to cover.  No plain inception_next run exists yet, so the
