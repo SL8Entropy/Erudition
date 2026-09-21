@@ -3250,6 +3250,11 @@ def make_bilzard_cfgs():
         # cnx_fastvit_ep150 (no teacher) and cnx_fastvit_kd (tiny alone as teacher).
         ("cnx_tiny_kd_ens", _kd_ens("hf_hub:timm/convnext_tiny.in12k_ft_in1k_384")),
         ("cnx_fastvit_kd_ens", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
+        # FastViT taught by ConvNeXt-small alone -- the counterpart of cnx_fastvit_kd (taught by
+        # tiny).  Its interest is as an averaging partner: a student of small should make
+        # different mistakes from tiny, and tiny + (student of tiny) already reached 4.766.
+        ("cnx_fastvit_kd_small", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
+                                         teachers=["results/0801_V2_ep150"])),
         # InceptionNeXt-tiny (28.1M in the U-Net, fits unchanged) taught by ConvNeXt-small alone.
         # Only ImageNet-1k weights exist for it, a weaker start than the ConvNeXts' in12k, which is
         # the gap the teacher is meant to cover.  No plain inception_next run exists yet, so the

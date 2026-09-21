@@ -1018,3 +1018,56 @@ inflated; only the ordering is meaningful. Params are for the whole model.
 - Recipe `cnx_nano_kd_ens`: `convnext_nano.in12k_ft_in1k` student, teachers [`0801_V2_ep150`, `cnx_tiny_ep150`], weight 1, T 2.
 - Control: `cnx_nano` (no teacher).
 - Weights are not downloaded yet.
+
+### cnx_fastvit_kd final + inference-speed options (2026-09-21)
+
+**`cnx_fastvit_kd_ep150` final:**
+- Pooled 4.9292 (test-picked convention), against fastvit 5.2132 and tiny 4.9044.
+- Unpicked: last 5.119 (tiny 5.144), late avg 5.110 (tiny 5.093).
+- Distillation closed ~90% of the gap. One seed.
+
+**Weights downloaded** (urllib, sha256 verified; huggingface_hub fails SSL on this machine, but
+urllib uses the Windows cert store): `convnext_nano.in12k_ft_in1k` 62.4 MB,
+`inception_next_tiny.sail_in1k` 112.3 MB. Both load with HF_HUB_OFFLINE=1.
+
+**Inference profile.** Trained U-Nets, 1x16x345x400, idle RTX 3050, scratchpad
+`infer_profile.py` / `infer_profile2.py`. ms per well, U-Net only:
+
+    variant                                   tiny   fastvit  small
+    fp32                                      46.5   32.1     68.5
+    bf16 autocast + channels_last (CURRENT)   25-26  22-23    37.5
+    fp16 autocast                             31.0   22.9     36.2
+    bf16 CUDA graph                           25.4   20.8
+    pure fp16 weights, norms kept fp32        22.0   19.0
+    pure fp16 + CUDA graph                    21.5   18.3
+
+- AMP is already on (cfg `amp_dtype=bfloat16`, `channels_last_2d=True`).
+- Pure fp16 with fp32 norms is ~16% faster and *closer* to fp32 than current bf16: relative
+  output drift 7e-4 vs 3.7e-3. Plain `.half()` crashes because a custom norm casts its input to
+  fp32; the norms must stay fp32.
+- CUDA graphs save only 0.5-2 ms, so the model is compute-bound, not launch-bound.
+- Decoder is ~8 ms of tiny's 25: up blocks 0.8/1.2/1.9, full_up_block 2.6, out head 1.8.
+  The costliest parts are the full-resolution ones the 2:1 rule says matter.
+- TensorRT, torch_tensorrt and triton are not installed (so no torch.compile on Windows).
+  onnxruntime is CPU-only.
+- Whole-pipeline holdout prediction ~12 s / 155 wells, about 75-80 ms per well (log timestamps,
+  rough). The U-Net is about a third of per-well cost; the rest is CPU-side prep and
+  post-processing.
+
+### Averages with FastViT, including the distilled one (2026-09-21) -- corrects a prediction
+
+50/50 `TVT_pred` averages, holdout (test-picked convention), robust_compare against the stronger member:
+
+    pair                     pooled   err corr   check
+    small + fastvit          4.9049   0.854      vs small: k*=2, 76%     REJECT
+    small + fastvit_kd       4.8153   0.890      vs small: k*=54, 98.4%  ACCEPT
+    tiny + fastvit           4.8487   0.838      vs tiny:  k*=81, 72.5%  ACCEPT (weak)
+    tiny + fastvit_kd        4.7656   0.879      vs tiny:  k*=31, 90.3%  ACCEPT
+    small + tiny             4.7782   0.870      vs tiny:  k*=67, 91%    ACCEPT
+
+**The prediction "a distilled student is a worse averaging partner for its teacher" was wrong.**
+Correlation did rise (0.838 -> 0.879), but the student's own accuracy rose more (5.21 -> 4.93).
+tiny + its own FastViT student (4.766) is the best pair found, at ~44 ms/well against small+tiny's ~52.
+
+- New recipe `cnx_fastvit_kd_small`: FastViT taught by `0801_V2_ep150` alone. It is verified to
+  resolve and load its teacher.
