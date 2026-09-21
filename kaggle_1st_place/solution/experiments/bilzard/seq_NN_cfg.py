@@ -3172,6 +3172,20 @@ def make_bilzard_cfgs():
         c.refresh()
         return c
 
+    def _fastvit_kd(teacher_dir="results/cnx_tiny_ep150", weight=1.0, temperature=2.0):
+        c = _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")
+        c.distill_teacher_dir = teacher_dir     # read by seq_NN_train.load_distill_teacher
+        c.distill_weight = float(weight)
+        c.distill_temperature = float(temperature)
+        return c
+
+    def _tiny_synth(src):
+        c = deepcopy(src)
+        c.unet_cfg = dict(c.unet_cfg, unet_arch="convnext_small",
+                          unet_timm_model_name="hf_hub:timm/convnext_tiny.in12k_ft_in1k_384")
+        c.refresh()
+        return c
+
     def _mobileone(name="hf_hub:timm/mobileone_s1.apple_in1k"):
         """MobileOne, whose training-time branches collapse into plain 3x3 convs for inference.
 
@@ -3202,6 +3216,19 @@ def make_bilzard_cfgs():
         # weights; note the ConvNeXts start from ImageNet-12k, a stronger pretraining.
         ("cnx_fastvit", _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
         ("cnx_mobileone", _mobileone()),
+        # rb_v2_synth's simulation on the tiny backbone.  rb_v2_synth was still descending at
+        # 150 epochs and is already better than the baseline on the bulk of the holdout (its
+        # removal curve is negative from k=10 to k~105), so the open question is what it does
+        # with a real budget.  tiny matches small within measurement at 38% less training time,
+        # and results/cnx_tiny_ep150 is the matched control, so this asks the same question
+        # ~4 hours cheaper.
+        ("cnx_tiny_synth", _tiny_synth(synth_cfg)),
+        # FastViT taught by ConvNeXt-tiny.  FastViT trained on its own reached 5.30/5.32 on the
+        # unpicked checkpoints against tiny's 5.14/5.09, so unlike the 2nd-place workspace's
+        # distillation attempt (whose teacher matched the student's own baseline and transferred
+        # nothing) there is a measured gap here to transfer.  The student also comes from a family
+        # whose own ImageNet weights were produced by distillation.
+        ("cnx_fastvit_kd", _fastvit_kd()),
     ]
 
 

@@ -3,6 +3,7 @@ import gc
 import inspect
 import math
 import os
+import pickle
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -2750,6 +2751,70 @@ def _raise_if_nonfinite_loss(loss, loss_details, batch, fold_name, epoch, batch_
     )
 
 
+def load_distill_teacher(cfg, device, log=None):
+    """Load a finished run's model to act as a distillation teacher, frozen.
+
+    `cfg.distill_teacher_dir` points at a results directory; its `models.pkl` holds the
+    trained model object itself, so the teacher brings its own architecture and no config
+    juggling is needed.  Returns None when distillation is off.
+
+    This only pays off when the teacher is genuinely better than the student would be on its
+    own: the 2nd-place workspace ran a distillation whose teacher matched the student's own
+    baseline, and it transferred nothing.  Here the gap is measured -- convnext_tiny 5.09/5.14
+    against fastvit_sa12 5.30/5.32 on the unpicked checkpoints.
+    """
+    teacher_dir = getattr(cfg, "distill_teacher_dir", None)
+    if not teacher_dir or float(getattr(cfg, "distill_weight", 0.0)) <= 0.0:
+        return None
+    path = Path(teacher_dir) / "models.pkl"
+    if not path.exists():
+        raise FileNotFoundError(f"distill_teacher_dir has no models.pkl: {path}")
+    with path.open("rb") as handle:
+        payload = pickle.load(handle)
+    if isinstance(payload, dict):
+        if not payload:
+            raise ValueError(f"empty models.pkl at {path}")
+        teacher = payload[sorted(payload)[0]]
+    else:
+        teacher = payload
+    teacher = teacher.to(device).eval()
+    for param in teacher.parameters():
+        param.requires_grad_(False)
+    if log is not None:
+        n_par = sum(p.numel() for p in teacher.parameters()) / 1e6
+        log(
+            f"distillation: teacher from {path} ({n_par:.1f}M params, frozen), "
+            f"weight={float(getattr(cfg, 'distill_weight', 0.0)):g}, "
+            f"temperature={float(getattr(cfg, 'distill_temperature', 2.0)):g}"
+        )
+    return teacher
+
+
+def distill_alignment_loss(student_extra, teacher_extra, target_mask, temperature,
+                           loss_scale_weight=None):
+    """KL(teacher || student) over the depth axis of the alignment distribution.
+
+    `alignment_logits` scores every candidate depth for every column, so matching it passes on
+    which *other* depths the teacher thought plausible -- the part a hard label throws away,
+    and the part that matters when rock layers repeat.  Scaled by temperature^2 so the
+    gradient magnitude does not change with the temperature.
+    """
+    student_logits = student_extra.get("alignment_logits")
+    teacher_logits = teacher_extra.get("alignment_logits")
+    if student_logits is None or teacher_logits is None:
+        raise ValueError("distillation requires extra['alignment_logits'] from both models")
+    if student_logits.shape != teacher_logits.shape:
+        raise ValueError(
+            f"teacher/student alignment shapes differ: {tuple(teacher_logits.shape)} vs "
+            f"{tuple(student_logits.shape)} -- the two runs must share the grid"
+        )
+    temperature = max(float(temperature), 1e-3)
+    student_log_prob = F.log_softmax(student_logits.float() / temperature, dim=-1)
+    teacher_prob = F.softmax(teacher_logits.float() / temperature, dim=-1)
+    per_bin = (teacher_prob * (teacher_prob.clamp_min(1e-12).log() - student_log_prob)).sum(dim=-1)
+    return _weighted_masked_mean(per_bin * temperature**2, target_mask, None, loss_scale_weight)
+
+
 def run_training(model, train_loader, val_loader, cfg, log, fold_name, finetune_loader=None):
     device = torch.device(cfg.device)
     amp_dtype = getattr(torch, cfg.amp_dtype)
@@ -2761,6 +2826,9 @@ def run_training(model, train_loader, val_loader, cfg, log, fold_name, finetune_
     best_epoch = "NA"
     best_state = None
     val_history = []
+    distill_teacher = load_distill_teacher(cfg, device, log)
+    distill_weight = float(getattr(cfg, "distill_weight", 0.0))
+    distill_temperature = float(getattr(cfg, "distill_temperature", 2.0))
 
     def run_phase(
         *,
@@ -2889,6 +2957,26 @@ def run_training(model, train_loader, val_loader, cfg, log, fold_name, finetune_
                         z_rel=z_rel,
                         loss_scale_weight=loss_scale_weight,
                     )
+                    if distill_teacher is not None:
+                        with torch.no_grad():
+                            _, teacher_extra = model_forward(
+                                distill_teacher,
+                                unet_static,
+                                typewell_aux,
+                                z_rel=z_rel,
+                                bin_count=bin_count,
+                                row_mask=batch["row_mask"].to(device, non_blocking=True),
+                                extra_return=True,
+                            )
+                        distill_term = distill_alignment_loss(
+                            extra,
+                            teacher_extra,
+                            target_mask,
+                            distill_temperature,
+                            loss_scale_weight=loss_scale_weight,
+                        )
+                        loss = loss + distill_weight * distill_term
+                        loss_details["distill"] = distill_term.detach()
                     _raise_if_nonfinite_loss(
                         loss,
                         loss_details,

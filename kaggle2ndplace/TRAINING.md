@@ -1667,3 +1667,28 @@ the control's own epoch length, so step counts match:
     python -u anchor_train.py --out runs/C_synth2_s1 --row 1.0 --n-move 5 --epoch-len 1150 --epochs 120 --eval-every 5 --tta 8 --seed 1 --synth-prob 0.77
 
 Judge it on both the endpoint and the plateau mean from round 60 against the three control seeds.
+
+## Knowledge distillation: the one version with a measured gap to transfer
+
+`X_distill` failed for a reason that was diagnosed at the time and is worth restating: the
+teacher (3-seed ensemble, 5.993) was no better than the student's own baseline (`res_C_row1`,
+5.942), so there was nothing to copy. Distillation can only transfer a gap that exists.
+
+Where an actual gap exists in this project:
+
+    bigger encoder        none -- convnext_tiny matches convnext_small (measured)
+    seed ensembling       5.993 vs 6.024 best single seed -- negligible
+    8-phase MD TTA        **0.26-0.56 ft on every AnchorCNN run**, at 8x inference
+
+So the distillation worth building is **teacher = the model decoded over 8 MD phases, student =
+the same architecture at a single phase**. It targets a repeatable, measured gap, and success
+removes an 8x inference cost rather than adding one. On the ConvNeXt side the same idea is not
+worth it: TTA is only -0.04 ft there.
+
+Implementation note: `distill_loss` currently matches the *move field*, but TTA averages decoded
+paths that live on different column grids, so a TTA teacher's signal has to be the decoded path
+(or the level posterior mapped back to MD), not the raw move field. That is the change needed.
+
+Prior attempt at the same target: `X_antialias` tried to make one phase behave like eight with a
+prefilter, and its single-phase score (6.737) was worse than every control seed's. Distillation
+is a second, better-motivated attempt at the same goal.

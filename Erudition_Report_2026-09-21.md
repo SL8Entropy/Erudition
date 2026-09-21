@@ -1,6 +1,6 @@
 # Erudition — Full Project Report
 
-**Date:** 18 September 2026
+**Date:** 21 September 2026
 **Covers:** all work in `kaggle_1st_place/` and `kaggle2ndplace/` up to this date.
 **Written for:** anyone, including people who don't work in drilling or machine learning.
 Technical words are explained the first time they appear, and there is a glossary at the end (Part 12).
@@ -37,9 +37,13 @@ open and how to carry on.
   "AnchorCNN") using one fixed weight. The gain is tiny (0.085 ft), smaller than our test can
   reliably detect, and it makes the system 5–6× slower. **For a drilling rig, one model is the
   better choice.**
-- **Current recommendation for a rig: ConvNeXt-tiny, run once, no blending, no averaging.** Tested
-  on 19 September, it was as accurate as the standard ConvNeXt-small within what we can measure,
-  while needing about a third less computing and running about 27% faster (§6).
+- **The rig question is settled: ConvNeXt-tiny, run once, no blending, no averaging.** Tested on
+  19 September, it was as accurate as the standard ConvNeXt-small within what we can measure,
+  while needing about a third less computing and training 38% faster (§6). Two cheaper backbones
+  were then tested and the ladder stops here: FastViT lost 0.3 ft and MobileOne lost 1.6 ft. The
+  accuracy-versus-size curve has a knee and tiny sits on it (§6).
+- **Nothing still on the to-do list would change that recommendation.** The remaining experiments
+  are for completeness or for a write-up, not for deployment (§9).
 - **Correction to all ConvNeXt scores:** the 1st-place code picks the checkpoint that scores best
   on the test wells, so its reported numbers are about 0.15 ft flattering (§7.7). Comparisons
   between ConvNeXt runs are still fair, because they were all picked the same way.
@@ -124,6 +128,27 @@ Because the score is noisy, we used three checks alongside the raw number:
 - **Resampling (bootstrap):** re-score on many random re-samples of the test wells and see how
   often the improvement holds.
 
+### 2.6 What kind of machine-learning problem this is
+
+Useful to know, because it decides which published methods are relevant. **It is not
+classification.**
+
+- **The overall task is dense regression**: for every point along the well, predict a continuous
+  number (depth within the rock layers).
+- **In image terms it is stereo matching**, also called disparity estimation. The 1st-place model
+  is literally one: the gamma-ray mismatch forms a "cost volume", the network aggregates that
+  cost, and the final averaging step is the standard soft-argmin used in stereo networks. In
+  stereo you work out how far each pixel shifts between two camera views; here you work out how
+  far the well sits from its reference log. Same mathematics.
+- **The final decoding step is path finding.** The AnchorCNN searches for the best path through a
+  2-D cost image using dynamic programming — a shortest-path search.
+- **Classification appears inside** the AnchorCNN (each step is sorted into one of 21 "how far did
+  it move" options, then the steps are added up), but that is a means, not the task.
+
+Closest named cousins if you want literature: stereo disparity estimation; retinal layer
+segmentation in eye scans (finding boundary curves through an image, usually with dynamic
+programming); and seismic horizon tracking, which is the same problem in the same industry.
+
 ## 3. The story of the project
 
 1. **Rebuilding the 2nd-place model.** We wrote the AnchorCNN's training code from scratch on
@@ -153,6 +178,11 @@ Because the score is noisy, we used three checks alongside the raw number:
    training on longer stretches, and better synthetic data. We checked their claims against our data.
 7. **A full review.** We scored the 1st-place author's much stronger tracker, tested every way
    of combining models, measured model sizes for a rig, and audited what had really been tested.
+8. **Making it cheap enough for a rig.** We screened a dozen replacement networks, trained the
+   two most promising (ConvNeXt-tiny: as good, a third cheaper; FastViT: worse), built a third
+   (MobileOne: 36% faster but 1.6 ft worse), and found that the reported scores of every 1st-place run
+   were flattered by about 0.15 ft because the code keeps whichever checkpoint scored best on the
+   test wells.
 
 ## 4. Results
 
@@ -168,7 +198,9 @@ Because the score is noisy, we used three checks alongside the raw number:
 | ConvNeXt, 60 rounds | 5.16 | |
 | ConvNeXt-small, 150 rounds | 4.98 | checkpoint picked on test wells (§7.7) |
 | ConvNeXt-small, 150 rounds + averaging over 8 shifted views | **4.94** | best single model; same caveat |
-| **ConvNeXt-tiny**, 150 rounds | **4.90** | same caveat; a third less computing than small |
+| **ConvNeXt-tiny**, 150 rounds | **4.90** | same caveat; a third less computing than small; **the rig recommendation** |
+| FastViT-SA12, 150 rounds | 5.21 | a cheaper backbone; worse on every measure (§6) |
+| MobileOne-S1, 150 rounds | 6.51 | the cheapest backbone tried; far worse (§6) |
 | ConvNeXt + AnchorCNN, one fixed weight | **4.85** | best overall; 5–6× slower |
 | Our particle filter (best version) | ~12.0 | a tracker, not a learned model |
 | The 1st-place author's particle filter | 7.35 | much better tracker than ours |
@@ -401,15 +433,59 @@ Measured on this laptop's GPU, for one well at a time, counting the network only
   **1.5%** of its computing on 2-D spatial filtering, and 70% on mixing channels. Replacing the
   spatial filters cannot save much. We tested that design directly in the AnchorCNN: 11.4 ft
   against a 6.0–6.6 baseline.
-- **Other drop-in replacements** tested for fit (build and run only): ConvNeXt-V2 tiny/nano,
-  InceptionNeXt-tiny, ConvFormer-S18, CAFormer-S18. MambaOut, EfficientNetV2, RegNet, RDNet and
-  Hiera would need code changes. Real Mamba/Samba models can't run on this Windows setup. The
-  1st-place author had already built 10 transformer backbones plus two other model types, and
-  kept ConvNeXt-small in all six submitted versions.
+- **MobileOne-S1 was tested, and it is far worse: 6.51 ft against tiny's 4.90.** That is a
+  1.61 ft loss — four times the noise floor, so decisive. It would have been the fastest option
+  (14.0 ms against tiny's 21.9, a 36% saving), and the branch-collapsing trick it relies on was
+  verified exact, but the accuracy cost is not close to acceptable. Two fixes were made first so
+  the comparison would be fair: its channel list counts its own first layer, and its first stage
+  shrinks the image where ConvNeXt's does not, which would otherwise have made every feature map
+  coarser.
+- **Put together, the backbone results show a knee, and ConvNeXt-tiny sits on it:**
+
+  | backbone size | model | score |
+  |---|---|---|
+  | 49.5M | ConvNeXt-small | 4.98 |
+  | 27.8M | **ConvNeXt-tiny** | **4.90** |
+  | 10.4M | FastViT-SA12 | 5.21 |
+  | 3.6M | MobileOne-S1 | 6.51 |
+
+  Halving the model from small to tiny is free — above about 28M the model is limited by how
+  much data it has, not by its size. Below about 10M it falls off a cliff. **The cost ladder is
+  closed.**
 - **ConvNeXt-base** (bigger) is not recommended: 1.7× the computing, no matching pretraining,
   likely won't fit in training on a 6 GB GPU, and the model is limited by data, not size.
 - **Putting a ConvNeXt inside the AnchorCNN** would cost about 15× the AnchorCNN's normal
   computing (122 GFLOP).
+
+### 6.1 Every replacement we screened
+
+The 1st-place author had already built 10 transformer backbones plus two other model types, and
+**kept ConvNeXt-small in all six submitted versions.** On top of that we screened:
+
+| candidate | fits without code changes? | notes |
+|---|---|---|
+| ConvNeXt-V2 tiny / nano | yes | V2 is ~2× slower than V1 at identical arithmetic (its extra normalisation layer) |
+| InceptionNeXt, ConvFormer, CAFormer | yes | untested for accuracy |
+| **FastViT-SA12** | yes | **trained: worse** (§6) |
+| **MobileOne-S1** | needed a small fix, now done | **trained: 1.6 ft worse** (§6) |
+| FasterNet | yes | fewer operations, **1.8× slower** than ConvNeXt-small |
+| EfficientNet-B3/B4, EfficientNetV2 | no | and B3/B4 are **slower** than tiny (9.5 / 11.6 vs 7.2 ms) at a quarter of the arithmetic |
+| Swin | no (but the author's transformer path supports it) | never used in any submitted version |
+| MobileNetV4, RepViT, RDNet, Hiera, EdgeNeXt | no | would need adapters |
+| HRNet / Lite-HRNet | no | fails outright at our image size; Lite-HRNet not available |
+| **DINOv2** | no | single-scale transformer built for 518×518 photos; needs a whole feature-pyramid adapter, and our input is a synthetic matching image, not a photo |
+| FasterViT, CMT | not available | not in the library; would need new dependencies or writing from scratch |
+
+### 6.2 Two rules this produced
+
+1. **Judge candidates by measured milliseconds, never by "operations".** At our image size the
+   work is limited by memory traffic. FasterNet used fewer operations and ran 1.8× slower;
+   FastViT halved the arithmetic for 13% real speed; MobileOne's collapse trick changed the
+   arithmetic by 2% and the speed by 3.7×.
+2. **"Use a big encoder with a small decoder" is already the design.** The decoder's width is 32
+   channels against the encoder's 768, and the projection layers that connect them already exist.
+   Timed inside the model, the decoder parts hold about 0.05M numbers — their cost is the
+   resolution they run at, not their width, so shrinking them further saves almost nothing.
 
 **Recommendation: ConvNeXt-tiny, one pass, no blend, no averaging.** A third less computing and
 38% faster training than the original, for no accuracy we can measure. Cheaper backbones than
@@ -480,16 +556,31 @@ tiny have been tried and cost accuracy without buying much speed.
 | Output files landed in the wrong folder | A script changed directory before saving | Moved; nothing overwritten |
 | Blend score first quoted as 4.834 | That number was tuned on the same wells it was scored on | The honest cross-checked figure is 4.852 |
 | Synthetic generator gave up after one try | Asked for 77% synthetic wells, delivered 32% | Now retries up to 12 pairings; delivers 73% |
-| Synthetic run changed two things | It also did 2.3× the training steps, so it overfitted within the run | The proper test (§9.1, run 2) matches steps with its comparison run |
+| Synthetic run changed two things | It also did 2.3× the training steps, so it overfitted within the run | The proper test (§9.1, run 1) matches steps with its comparison run |
 | Called the synthetic run "worse" from its final score alone | The final score is inside the normal range, and the whole curve leaned the other way | Judge on the curve's average as well as the endpoint |
 | Treated ConvNeXt scores as unpicked | The 1st-place code keeps the checkpoint that scores best on the test wells, and the notes wrongly called this safe | Flattery measured at ~0.15 ft; unpicked scores now read from the logs (§7.7) |
+| Called MobileOne's branch-collapsing "broken" | Compared raw difference sizes on an untrained network whose internal values reach 500 million, so a large-looking gap was actually 5 parts in 10 million | Checked as a *proportion* instead: it is exact |
+| Recommended a 6.5-hour run without asking whether its effect was measurable | The 1st-place synthesis refinements are worth about 0.1 ft, below what 155 wells can resolve | Dropped; the same question on the AnchorCNN is a 0%-vs-73% contrast and takes 75 minutes |
 
 ## 9. What is still open
+
+### 9.0 Does any of it still matter?
+
+Worth stating plainly before the list. **The deployment question is answered** (§6), and nothing
+below changes it:
+
+- The AnchorCNN only matters through the blend, and the blend costs 5–6× the inference for
+  0.085 ft, so it has been set aside.
+- Anything that makes the AnchorCNN cheaper or better therefore improves a model we are not
+  planning to deploy.
+
+So the remaining runs are worth doing for **completeness or a write-up**, not for the rig. If the
+goal is a write-up, the highest-value work is not another single run — it is making the existing
+claims measurable (§9.4), because single runs keep returning "unresolved".
 
 ### 9.1 Runs waiting, most important first
 
 The two cost runs that used to head this list (ConvNeXt-tiny, FastViT) are finished; see §6.
-The rig question is settled, so the remaining runs are about accuracy.
 
 **1) AnchorCNN with synthetic data, done properly.** The first attempt was flawed (§7.1). This
 version changes only one thing (synthetic data on), with the generator bug fixed and the same
@@ -517,11 +608,27 @@ python -u anchor_train.py --out runs/C_s3_pfchan --row 1.0 --n-move 5 --epoch-le
 ```
 Compare against `runs/C_s3` (6.200 ft). Three wins out of three would be meaningful evidence.
 
+**3) Copying the 8-view average into a single-view model** (knowledge distillation, not yet
+built). This is the one accuracy idea left that targets a gap **bigger than the noise**: view
+averaging is worth 0.26–0.56 ft on every AnchorCNN run and costs 8× the inference, so teaching a
+single-view model to imitate it would pay that back. Two caveats: our earlier attempt at the same
+goal (a smoothing filter) failed, and our existing distillation code copies the model's internal
+step predictions, which live on different grids for each view — the teacher's signal has to be
+the final decoded path instead. On the ConvNeXt the same idea isn't worth it (averaging is only
+worth 0.04 ft there).
+
+**Closed since the last version:** MobileOne-S1 was trained and lost 1.6 ft (§6), so the cheaper-backbone line is finished. Rescuing it, or FastViT, with distillation is not worth it: FastViT's whole prize is 3 ms, and MobileOne would need 1.6 ft recovered.
+
+**Also dropped:** the 1st-place synthesis refinements at 300 rounds (`cnx_tiny_synth`,
+registered and ready). The baseline already generates synthetic wells for 85% of its samples, so
+that run tests three *refinements* worth about 0.1 ft — below what 155 wells can resolve, for
+6.5 hours of GPU.
+
 ### 9.2 Never tested at all (including some we once thought were)
 
 | item | status |
 |---|---|
-| Synthetic data in the AnchorCNN, done properly | Tried once, but flawed (§7.1). Run 2 above is the proper test. |
+| Synthetic data in the AnchorCNN, done properly | Tried once, but flawed (§7.1). Run 1 in §9.1 is the proper test. |
 | ConvNeXt inside the AnchorCNN | Built, never run. "Is the 1 ft gap just the network?" is open. |
 | Sibling reference in the AnchorCNN on its own | Only tried on top of tracker inputs |
 | Separating the two changes in "C" (grid vs step sizes) | Never run, so "C is free" can't be credited to either alone |
@@ -610,7 +717,8 @@ workshop that welcomes negative results or in an applied geoscience journal. A p
 | `kaggle_1st_place/EXPLAINER.md` | A from-scratch explanation of how the ConvNeXt model works |
 | `kaggle2ndplace/runs/` | Every AnchorCNN run: settings, logs, predictions |
 | `kaggle_1st_place/solution/results/` | Every ConvNeXt run |
-| `kaggle_1st_place/solution/experiments/bilzard/seq_NN_cfg.py` | The ConvNeXt variants, including `cnx_tiny`, `cnx_base` and `pf_v1` |
+| `kaggle_1st_place/solution/experiments/bilzard/seq_NN_cfg.py` | The ConvNeXt variants: `cnx_tiny`, `cnx_base`, `cnx_fastvit`, `cnx_mobileone`, `cnx_tiny_synth`, `pf_v1` |
+| `kaggle_1st_place/solution/seq_NN_honest_curve.py` | Reads a run's log and prints the checkpoints nobody picked (§7.7) — use this, not the headline score, to compare ConvNeXt runs |
 
 **Main code we wrote (in `kaggle2ndplace/`)**
 
@@ -657,3 +765,7 @@ workshop that welcomes negative results or in an applied geoscience journal. A p
 | **GFLOP** | Billions of arithmetic operations; a rough measure of computing cost. |
 | **int8** | Storing a network's numbers in 8 bits to save space and, sometimes, time. |
 | **Overfitting** | A model memorising its training examples instead of learning general patterns. |
+| **Reparameterisation** | Training a network with extra parallel branches, then mathematically folding them into one plain filter for deployment. Same answers, less memory traffic, so it runs faster. |
+| **Knowledge distillation** | Training a small, fast model to imitate a bigger or slower one, so it inherits the better model's behaviour at the cheaper model's speed. |
+| **Stereo matching / disparity** | Working out how far something shifts between two views of a scene. The closest named computer-vision problem to this task (§2.6). |
+| **Cost volume** | An image of "how badly does each candidate depth match here", which the network then cleans up. |

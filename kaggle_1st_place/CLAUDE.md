@@ -786,3 +786,76 @@ values wrongly called it broken.) Accuracy is therefore identical branched or re
 reparameterise only for deployment speed.
 
 Weights `mobileone_s1.apple_in1k` (19.6 MB) are **not yet downloaded**.
+
+### "Big encoder + pruned decoder" is already the shipped design (2026-09-20)
+
+`unet_emb_dim=32`, `unet_mults=(1,2,4,4)`, `unet_stacks=1` against an encoder that ends at 768
+channels, and `to_backbone` is already a 1x1 projection. Timed inside the U-Net (tiny, 345x400,
+fp16, batch 1; total 22.2 ms): backbone_stages 11.2, up_blocks ~5, full_up_block 2.2, out 1.5,
+stem 1.8, stem_down + to_backbone 0.16. The decoder parts hold ~0.05M parameters -- their cost
+is the resolution they run at, not their width, so pruning width further saves ~nothing while
+cutting resolution is what the 2:1 rule says costs accuracy.
+
+Encoder options screened for that idea:
+
+    convnext_tiny     27.8M  24.1 GFLOP   7.2 ms
+    convnextv2_tiny   27.9M  24.1 GFLOP  13.6 ms   (GRN makes V2 ~2x slower at equal FLOPs)
+    convnextv2_base   87.7M  82.4 GFLOP  27.0 ms   -> ~36 ms whole model vs tiny's 21.9
+    DINOv2 (vit_*_patch14_dinov2)  plain ViT: no `.stages`, patch 14, built for 518x518.
+        features_only returns single-scale tokens, so it needs a ViTDet-style feature pyramid
+        before this decoder can use it -- substantial work, and it is photo-pretrained while
+        the input here is a 16-channel synthetic cost image.
+
+### MobileOne-S1 trained: decisively worse, and the capacity curve has a knee (2026-09-20)
+
+Run done outside this repo, so `results/cnx_mobileone_ep150/` is not present here; copy it in when
+convenient so `seq_NN_honest_curve.py` can read its unpicked checkpoints.
+
+    HOLDOUT POOLED RMSE 6.5128 ft   (pre-SG-smoothing 6.5823)
+    per-well mean 4.6052, q50 3.2559, q95 11.3391
+
+Against `cnx_tiny_ep150` (4.9044, same test-picked convention) that is **+1.61 ft** -- four times
+the single-run noise floor, so decisive without needing the acceptance test. The weights were
+genuinely loaded: `_create_timm_model_with_retries` re-raises rather than falling back to random
+init, so a completed run implies the pretrained checkpoint was found.
+
+Accuracy against backbone size, all 150 epochs, same recipe:
+
+    49.5M  convnext_small   4.98
+    27.8M  convnext_tiny    4.90     <- the knee
+    10.4M  fastvit_sa12     5.21
+     3.6M  mobileone_s1     6.51
+
+**The model is data-limited above ~28M and capacity-limited below ~10M.** Halving from small to
+tiny is free; going further is not. The cost ladder is closed: ConvNeXt-tiny is the floor.
+
+This also retires the idea of distilling ConvNeXt-tiny into a cheaper backbone: for FastViT the
+prize is 3 ms (20.8 vs 23.0), and for MobileOne distillation would have to recover 1.6 ft.
+MobileCLIP-pretrained FastViT variants do not help either -- `fastvit_mci0` is 26.0 ms, slower
+than tiny itself.
+
+### Distillation built (2026-09-21): `cnx_fastvit_kd`
+
+Added to `experiments/bilzard`, teacher = a finished run's `models.pkl` (which stores the model
+object itself, so the teacher brings its own architecture):
+
+- `seq_NN_train.load_distill_teacher(cfg, device, log)` -- reads `cfg.distill_teacher_dir`,
+  takes the first fold, moves to device, `.eval()`, `requires_grad_(False)`. Returns None unless
+  `distill_weight > 0`.
+- `seq_NN_train.distill_alignment_loss(...)` -- KL(teacher || student) over the depth axis of
+  `extra["alignment_logits"]` at `distill_temperature`, scaled by T^2, masked through the
+  existing `_weighted_masked_mean`. Matching the full distribution is the point: it passes on
+  which *other* depths the teacher found plausible, which is exactly the information a hard
+  label discards when rock layers repeat.
+- Wired into the training step right before the non-finite check; logged as `distill=`.
+- Recipe `cnx_fastvit_kd`: fastvit_sa12 student, `distill_teacher_dir="results/cnx_tiny_ep150"`,
+  weight 1.0, temperature 2.0 (both untuned).
+
+Verified before running: teacher loads (31.9M, frozen); both models emit `alignment_logits` of
+(1, 345, 400) so the grids match; KL(teacher||teacher) = 1.0e-08; KL(student||teacher) = 1.68;
+gradients reach the student (total |grad| 2.2e3) and **no** teacher parameter receives one.
+
+Why this is worth running when `X_distill` in the 2nd-place workspace was not: there the teacher
+(5.993) was no better than the student's own baseline (5.942), so nothing could transfer. Here
+the gap is measured -- tiny 5.14/5.09 against fastvit 5.30/5.32 on unpicked checkpoints. Note the
+prize is small either way: FastViT is only 13% faster than tiny (20.8 vs 23.0 ms).
