@@ -3179,18 +3179,6 @@ def make_bilzard_cfgs():
         c.distill_temperature = float(temperature)
         return c
 
-    # Teacher = the small+tiny average, the one combination that passed the acceptance test
-    # (4.778 vs tiny 4.904, k*=67, 91% bootstrap).  Distilling it asks whether a single
-    # tiny-sized model can keep that gain at tiny's inference cost.
-    ensemble_teacher = ["results/0801_V2_ep150", "results/cnx_tiny_ep150"]
-
-    def _kd_ens(name, weight=1.0, temperature=2.0, teachers=None):
-        c = _backbone(name)
-        c.distill_teacher_dirs = list(teachers or ensemble_teacher)
-        c.distill_weight = float(weight)
-        c.distill_temperature = float(temperature)
-        return c
-
     def _tiny_synth(src):
         c = deepcopy(src)
         c.unet_cfg = dict(c.unet_cfg, unet_arch="convnext_small",
@@ -3228,10 +3216,6 @@ def make_bilzard_cfgs():
         # weights; note the ConvNeXts start from ImageNet-12k, a stronger pretraining.
         ("cnx_fastvit", _backbone("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
         ("cnx_mobileone", _mobileone()),
-        # ConvNeXt-nano: same family and same in12k_ft_in1k pretraining as tiny, 17.8M params in
-        # the U-Net vs tiny's 31.9M, and the fastest drop-in in the 2026-09-21 screen (faster than
-        # FastViT).  Sits between FastViT (12.3M, -0.3 ft) and tiny on the capacity curve.
-        ("cnx_nano", _backbone("hf_hub:timm/convnext_nano.in12k_ft_in1k")),
         # rb_v2_synth's simulation on the tiny backbone.  rb_v2_synth was still descending at
         # 150 epochs and is already better than the baseline on the bulk of the holdout (its
         # removal curve is negative from k=10 to k~105), so the open question is what it does
@@ -3245,21 +3229,6 @@ def make_bilzard_cfgs():
         # nothing) there is a measured gap here to transfer.  The student also comes from a family
         # whose own ImageNet weights were produced by distillation.
         ("cnx_fastvit_kd", _fastvit_kd()),
-        # The same students taught by the small+tiny ensemble.  cnx_tiny_kd_ens's control is
-        # results/cnx_tiny_ep150 (same architecture, no teacher); cnx_fastvit_kd_ens's are
-        # cnx_fastvit_ep150 (no teacher) and cnx_fastvit_kd (tiny alone as teacher).
-        ("cnx_tiny_kd_ens", _kd_ens("hf_hub:timm/convnext_tiny.in12k_ft_in1k_384")),
-        ("cnx_fastvit_kd_ens", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k")),
-        # InceptionNeXt-tiny (28.1M in the U-Net, fits unchanged) taught by ConvNeXt-small alone.
-        # Only ImageNet-1k weights exist for it, a weaker start than the ConvNeXts' in12k, which is
-        # the gap the teacher is meant to cover.  No plain inception_next run exists yet, so the
-        # control is cnx_tiny_ep150 (similar size); a matched no-teacher run would isolate the KD.
-        ("inx_tiny_kd_small", _kd_ens("hf_hub:timm/inception_next_tiny.sail_in1k",
-                                      teachers=["results/0801_V2_ep150"])),
-        ("inx_tiny", _backbone("hf_hub:timm/inception_next_tiny.sail_in1k")),
-        # ConvNeXt-nano taught by the small+tiny ensemble.  nano was the fastest drop-in in the
-        # screen and shares tiny's in12k_ft_in1k pretraining; its control is cnx_nano (no teacher).
-        ("cnx_nano_kd_ens", _kd_ens("hf_hub:timm/convnext_nano.in12k_ft_in1k")),
     ]
 
 

@@ -859,3 +859,162 @@ Why this is worth running when `X_distill` in the 2nd-place workspace was not: t
 (5.993) was no better than the student's own baseline (5.942), so nothing could transfer. Here
 the gap is measured -- tiny 5.14/5.09 against fastvit 5.30/5.32 on unpicked checkpoints. Note the
 prize is small either way: FastViT is only 13% faster than tiny (20.8 vs 23.0 ms).
+
+### DINOv2 as a ConvNeXt replacement: no (2026-09-21)
+
+Measured, encoder only, 16 channels (timm adapts the patch embed), fp16, batch 1. 345 is not a
+multiple of the 14-pixel patch, so the input had to be padded to 350x406:
+
+    convnext_tiny            27.8M   24.1 GFLOP   8.6 ms   maps (86,100) (43,50) (21,25) (10,12)
+    vit_small_dinov2         22.8M   42.3 GFLOP   8.5 ms   maps (25,29) x3  -- single scale
+    vit_base_dinov2          88.0M  146.2 GFLOP  16.3 ms   maps (25,29) x3  -- single scale
+
+Every DINOv2 map is 25x29, about 24x fewer positions than ConvNeXt's finest in-model map
+(173,100). The 2:1 resolution rule measured in the 2nd-place workspace (one extra halving cost
+0.9 ft, two cost 1.7 ft) says fine resolution is exactly what this task needs, and patch-14
+tokenisation discards it in the first layer. It would also need a multi-scale adapter and
+padding, and it is photo-pretrained while the input is a synthetic 16-channel cost image.
+
+Recent stereo work agrees on *how* such models are used: DEFOM-Stereo (CVPR 2025) keeps a CNN
+for matching features and adds Depth Anything V2 (DINOv2-based) as a second source for
+initialisation; MonSter (CVPR 2025) fuses a monocular prior with matching. Add alongside, never
+replace. The analogue already exists here: the particle-filter channels are an independent prior
+fed into the matcher (`pf_v1` would use the author's 7.35 ft filter).
+
+Pointers from the same survey: IGEV++ (TPAMI 2025, multi-range cost volumes: coarse for large
+shifts, fine for detail -- maps onto large drift vs fine wiggles); Fast-FoundationStereo
+(arXiv 2512.11130: distillation + architecture search + pruning, >10x faster at near-equal
+accuracy, using 1.4M pseudo-labelled pairs); a CMT-enhanced Hiformer for well-log stratigraphic
+correlation (CNN+transformer with a geological loss term); WLFM (arXiv 2509.18152), a well-log
+foundation model pretrained on 1,200 wells for porosity/lithology -- no correlation task and no
+released weights, so not usable here.
+
+### A ConvNeXt ensemble is the strongest, most robust result so far (2026-09-21)
+
+Plain averages of existing holdout predictions (no weights fitted, so nothing tuned on the test
+wells). Row-level error correlation between the variants is 0.83-0.87 -- enough diversity to
+average:
+
+    tiny alone                                  4.9044
+    small + tiny                                4.7782   -0.126   k*=67  bootstrap 91.1%  ACCEPT
+    small + tiny + synth                        4.7652   -0.139   k*=65  bootstrap 88.9%  ACCEPT
+    small+TTA + tiny + synth+TTA + fastvit      4.7467   -0.158
+
+k*=67 is three times the accidental noise draw's k*=21, and every other change in this project
+sat at k*=0-2. Better than the ConvNeXt + AnchorCNN blend (4.852). Caveat: every member's
+checkpoint was picked on the test wells (see "Known caveat"), so absolute values are optimistic by
+~0.15 ft; the gain *relative to tiny* compares like with like.
+
+Two ways to use it: deploy small + tiny directly (~52 ms per well vs tiny's 22, i.e. 2.4x the cost
+for a robust 0.13 ft -- a far better trade than the AnchorCNN blend's 5-6x for 0.085), or distil
+the ensemble into tiny. The existing `load_distill_teacher` takes one teacher; an ensemble teacher
+needs it to load several dirs and average their softmax probabilities -- all ConvNeXt-family runs
+share the (345, 400) alignment grid.
+
+### Correction: "pseudo-label synthetic wells" is already happening (2026-09-21)
+
+`seq_NN_dataset.py:6301` replaces each training sample with a `z_shift` simulation with
+probability `sim_cfg['z_shift']['apply_prob']` (0.85), and a simulated well carries its exact
+generated path as the label. So synthetic wells never needed pseudo-labels, and the distillation
+term in `seq_NN_train.py` already runs the teacher on every training batch -- 85% of which are
+synthetic. The Fast-FoundationStereo lesson (1.4M pseudo-labelled pairs) applies to large pools of
+*unlabelled real* data, which this dataset does not have (`data/test` holds 3 wells). What remains
+open is only the choice of teacher and student.
+
+ConvNeXt-Base as teacher is not supported by the evidence: small (49.5M) already scores the same
+as tiny (27.8M), so above ~28M the model is limited by the 618 real wells, and a bigger teacher
+trained on the same wells knows no more. It would also need a different pretraining recipe
+(fb_in22k_ft_in1k_384; no in12k_ft_in1k_384 exists for base), a ~350 MB download, likely batch 2
+on 6 GB, and roughly 8-9 h for 150 epochs. The measured stronger teacher is the small + tiny
+ensemble (-0.126 ft vs tiny, k*=67).
+
+### Ensemble-teacher distillation built; single-teacher KD interim result (2026-09-21)
+
+**Interim `cnx_fastvit_kd_ep150` (epoch 130/150, still running), unpicked statistics:**
+
+    run                    picked         last          late avg (ep>=100)
+    cnx_tiny_ep150         4.9457 @110    5.1435 @150   5.0926   (teacher)
+    cnx_fastvit_ep150      5.2516 @100    5.3027 @150   5.3189   (no teacher)
+    cnx_fastvit_kd_ep150   4.9592 @105    5.1552 @130   5.1073   (taught by tiny)
+
+The student reached its teacher: late average -0.21 ft against plain FastViT, 0.015 ft from tiny.
+One seed each, and the A/B noise for single checkpoints is sd 0.39, so this is promising, not proven.
+The loss is active: train_loss is 0.399 vs 0.210 for plain FastViT at epoch 120. The epoch log
+prints only fixed keys, so `distill` never appears there. Epoch time ~65 s, about 2 h 40 min per 150 epochs.
+
+**Multi-teacher support:** `load_distill_teacher` now reads `cfg.distill_teacher_dirs` (a list),
+and the single `distill_teacher_dir` still works. It returns a list of frozen teachers.
+`distill_alignment_loss` accepts a list of teacher extras and averages their tempered softmaxes,
+so the target is the ensemble's mixture distribution. The train step runs every teacher under no_grad.
+
+**Recipes:** `cnx_tiny_kd_ens` (student tiny) and `cnx_fastvit_kd_ens` (student fastvit_sa12).
+Teacher = [`results/0801_V2_ep150`, `results/cnx_tiny_ep150`], weight 1, T 2.
+
+**Verified:**
+- 53.6M + 31.9M teachers load, frozen; 0.35 GB of weights.
+- self-KL with two identical teachers is 2e-9.
+- A dict and a one-element list give identical loss.
+- The mixture KL equals a hand-computed reference (7.336539).
+- A student equal to the mixture gives KL 1e-8.
+- The gradient reaches the student only.
+
+Check script: scratchpad `kd_ens_check.py`.
+
+**DINOv2 as teacher: not worth it.** It is not a trained teacher yet: it would need an adapter,
+padding to 350x406, and a full training run on the same 618 wells. Its single-scale 25x29 maps
+violate the 2:1 resolution rule, so it is expected to score *worse* than tiny as a student, and
+a teacher weaker than the student transfers nothing (the 2nd-place `X_distill` lesson). The
+ensemble teacher already provides a measured 0.126 ft margin at zero training cost.
+
+### Ensemble tiny + FastViT (2026-09-21)
+
+50/50 average of `TVT_pred`, holdout, same test-picked convention as every other number here:
+
+    tiny alone                 4.9044
+    tiny + fastvit             4.8487   -0.056 vs tiny, k*=81, bootstrap better in 72.5%  ACCEPT (weak)
+    small + fastvit            4.9049   no gain
+    small + tiny (earlier)     4.7782   -0.126 vs tiny, k*=67, bootstrap 91%
+
+- Error correlation: tiny/fastvit 0.838, small/fastvit 0.854, small/tiny 0.870.
+- The best FastViT weight on the holdout is 0.3 (4.8189), but that weight is chosen in-sample.
+  Only 50/50 is an honest figure.
+- Cost is ~44 ms/well (23.0 + 20.8) against ~52 ms for small+tiny: 16% cheaper for under half the gain.
+- A distilled FastViT is taught to copy tiny, so its errors should correlate *more* with tiny.
+  Expect it to be a worse ensemble partner than plain FastViT. Check with `cnx_fastvit_kd_ep150`
+  once that run writes its predictions.
+
+### Wider backbone drop-in screen (2026-09-21)
+
+Screened with `dropin3.py` in the scratchpad: the real U-Net, random weights, 345x400, fp16.
+**Timings were taken while `cnx_fastvit_kd` was training on the same GPU**, so absolute ms are
+inflated; only the ordering is meaningful. Params are for the whole model.
+
+    fits unchanged      params  GFLOP   ms
+    convnext_nano       17.8M   54.7    49.7   <- fastest; same in12k_ft_in1k recipe as tiny
+    fastvit_sa12        12.3M   39.9    53.0
+    convnext_tiny       31.9M   82.6    60.3
+    inception_next_tiny 28.1M   79.7    64.9   in1k weights only
+    convnextv2_nano     17.9M   54.7    70.7   GRN layer makes it slower than v1
+    convnextv2_tiny     32.0M   82.6    84.3
+    convformer_s18      26.3M   68.9   100.7
+    caformer_s18        25.8M   82.6   101.9
+
+- Do not fit: mambaout, repvit, efficientvit, edgenext, tiny_vit, hgnetv2 (constructor kwargs,
+  channel-layout or stem mismatches). Each would need adapter code.
+- Recipe `cnx_nano` added (`hf_hub:timm/convnext_nano.in12k_ft_in1k`). Its weights are NOT downloaded yet.
+
+### InceptionNeXt student, ConvNeXt-small teacher (2026-09-21)
+
+- Recipe `inx_tiny_kd_small`: `inception_next_tiny.sail_in1k` student, teacher `results/0801_V2_ep150`, weight 1, T 2.
+- Recipe `inx_tiny`: the matched no-teacher control.
+- `_kd_ens` now takes `teachers=`.
+- Weights (in1k only) are not downloaded yet.
+- Caveat: the small teacher is not better than tiny on unpicked checkpoints (small last 5.091 /
+  late 5.163; tiny 5.144 / 5.093). The teacher therefore sets a ceiling of roughly tiny level; it
+  can only help if InceptionNeXt's in1k start leaves it below that.
+
+### ConvNeXt-nano student, small+tiny ensemble teacher (2026-09-21)
+
+- Recipe `cnx_nano_kd_ens`: `convnext_nano.in12k_ft_in1k` student, teachers [`0801_V2_ep150`, `cnx_tiny_ep150`], weight 1, T 2.
+- Control: `cnx_nano` (no teacher).
+- Weights are not downloaded yet.

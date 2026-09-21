@@ -2752,53 +2752,42 @@ def _raise_if_nonfinite_loss(loss, loss_details, batch, fold_name, epoch, batch_
 
 
 def load_distill_teacher(cfg, device, log=None):
-    """Load finished runs' models to act as distillation teachers, frozen.
+    """Load a finished run's model to act as a distillation teacher, frozen.
 
-    `cfg.distill_teacher_dirs` (a list) or the older single `cfg.distill_teacher_dir` points at
-    results directories; each `models.pkl` holds the trained model object itself, so a teacher
-    brings its own architecture and no config juggling is needed.  Returns a list of teachers,
-    or None when distillation is off.  With several teachers the loss averages their depth
-    distributions, so the student is taught the ensemble.
+    `cfg.distill_teacher_dir` points at a results directory; its `models.pkl` holds the
+    trained model object itself, so the teacher brings its own architecture and no config
+    juggling is needed.  Returns None when distillation is off.
 
     This only pays off when the teacher is genuinely better than the student would be on its
     own: the 2nd-place workspace ran a distillation whose teacher matched the student's own
     baseline, and it transferred nothing.  Here the gap is measured -- convnext_tiny 5.09/5.14
-    against fastvit_sa12 5.30/5.32 on the unpicked checkpoints, and the small+tiny average at
-    4.778 against tiny's 4.904 on the holdout (k*=67).
+    against fastvit_sa12 5.30/5.32 on the unpicked checkpoints.
     """
-    teacher_dirs = getattr(cfg, "distill_teacher_dirs", None)
-    if not teacher_dirs:
-        single = getattr(cfg, "distill_teacher_dir", None)
-        teacher_dirs = [single] if single else []
-    if not teacher_dirs or float(getattr(cfg, "distill_weight", 0.0)) <= 0.0:
+    teacher_dir = getattr(cfg, "distill_teacher_dir", None)
+    if not teacher_dir or float(getattr(cfg, "distill_weight", 0.0)) <= 0.0:
         return None
-    teachers = []
-    for teacher_dir in teacher_dirs:
-        path = Path(teacher_dir) / "models.pkl"
-        if not path.exists():
-            raise FileNotFoundError(f"distillation teacher dir has no models.pkl: {path}")
-        with path.open("rb") as handle:
-            payload = pickle.load(handle)
-        if isinstance(payload, dict):
-            if not payload:
-                raise ValueError(f"empty models.pkl at {path}")
-            teacher = payload[sorted(payload)[0]]
-        else:
-            teacher = payload
-        teacher = teacher.to(device).eval()
-        for param in teacher.parameters():
-            param.requires_grad_(False)
-        teachers.append(teacher)
-        if log is not None:
-            n_par = sum(p.numel() for p in teacher.parameters()) / 1e6
-            log(f"distillation: teacher from {path} ({n_par:.1f}M params, frozen)")
+    path = Path(teacher_dir) / "models.pkl"
+    if not path.exists():
+        raise FileNotFoundError(f"distill_teacher_dir has no models.pkl: {path}")
+    with path.open("rb") as handle:
+        payload = pickle.load(handle)
+    if isinstance(payload, dict):
+        if not payload:
+            raise ValueError(f"empty models.pkl at {path}")
+        teacher = payload[sorted(payload)[0]]
+    else:
+        teacher = payload
+    teacher = teacher.to(device).eval()
+    for param in teacher.parameters():
+        param.requires_grad_(False)
     if log is not None:
+        n_par = sum(p.numel() for p in teacher.parameters()) / 1e6
         log(
-            f"distillation: {len(teachers)} teacher(s), depth distributions averaged, "
+            f"distillation: teacher from {path} ({n_par:.1f}M params, frozen), "
             f"weight={float(getattr(cfg, 'distill_weight', 0.0)):g}, "
             f"temperature={float(getattr(cfg, 'distill_temperature', 2.0)):g}"
         )
-    return teachers
+    return teacher
 
 
 def distill_alignment_loss(student_extra, teacher_extra, target_mask, temperature,
@@ -2809,29 +2798,19 @@ def distill_alignment_loss(student_extra, teacher_extra, target_mask, temperatur
     which *other* depths the teacher thought plausible -- the part a hard label throws away,
     and the part that matters when rock layers repeat.  Scaled by temperature^2 so the
     gradient magnitude does not change with the temperature.
-
-    `teacher_extra` may be a list, one per teacher: their tempered probabilities are averaged,
-    so the target is the ensemble's mixture distribution rather than any one member's.
     """
-    teacher_extras = teacher_extra if isinstance(teacher_extra, (list, tuple)) else [teacher_extra]
     student_logits = student_extra.get("alignment_logits")
-    if student_logits is None:
-        raise ValueError("distillation requires extra['alignment_logits'] from the student")
+    teacher_logits = teacher_extra.get("alignment_logits")
+    if student_logits is None or teacher_logits is None:
+        raise ValueError("distillation requires extra['alignment_logits'] from both models")
+    if student_logits.shape != teacher_logits.shape:
+        raise ValueError(
+            f"teacher/student alignment shapes differ: {tuple(teacher_logits.shape)} vs "
+            f"{tuple(student_logits.shape)} -- the two runs must share the grid"
+        )
     temperature = max(float(temperature), 1e-3)
-    teacher_prob = None
-    for one in teacher_extras:
-        teacher_logits = one.get("alignment_logits")
-        if teacher_logits is None:
-            raise ValueError("distillation requires extra['alignment_logits'] from every teacher")
-        if student_logits.shape != teacher_logits.shape:
-            raise ValueError(
-                f"teacher/student alignment shapes differ: {tuple(teacher_logits.shape)} vs "
-                f"{tuple(student_logits.shape)} -- the runs must share the grid"
-            )
-        prob = F.softmax(teacher_logits.float() / temperature, dim=-1)
-        teacher_prob = prob if teacher_prob is None else teacher_prob + prob
-    teacher_prob = teacher_prob / len(teacher_extras)
     student_log_prob = F.log_softmax(student_logits.float() / temperature, dim=-1)
+    teacher_prob = F.softmax(teacher_logits.float() / temperature, dim=-1)
     per_bin = (teacher_prob * (teacher_prob.clamp_min(1e-12).log() - student_log_prob)).sum(dim=-1)
     return _weighted_masked_mean(per_bin * temperature**2, target_mask, None, loss_scale_weight)
 
@@ -2979,22 +2958,19 @@ def run_training(model, train_loader, val_loader, cfg, log, fold_name, finetune_
                         loss_scale_weight=loss_scale_weight,
                     )
                     if distill_teacher is not None:
-                        teacher_extras = []
                         with torch.no_grad():
-                            for one_teacher in distill_teacher:
-                                _, one_extra = model_forward(
-                                    one_teacher,
-                                    unet_static,
-                                    typewell_aux,
-                                    z_rel=z_rel,
-                                    bin_count=bin_count,
-                                    row_mask=batch["row_mask"].to(device, non_blocking=True),
-                                    extra_return=True,
-                                )
-                                teacher_extras.append(one_extra)
+                            _, teacher_extra = model_forward(
+                                distill_teacher,
+                                unet_static,
+                                typewell_aux,
+                                z_rel=z_rel,
+                                bin_count=bin_count,
+                                row_mask=batch["row_mask"].to(device, non_blocking=True),
+                                extra_return=True,
+                            )
                         distill_term = distill_alignment_loss(
                             extra,
-                            teacher_extras,
+                            teacher_extra,
                             target_mask,
                             distill_temperature,
                             loss_scale_weight=loss_scale_weight,
