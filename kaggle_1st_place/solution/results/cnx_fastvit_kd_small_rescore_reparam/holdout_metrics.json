@@ -1,0 +1,32 @@
+{
+  "train_frac": 0.8,
+  "train_wells": 618,
+  "holdout_wells": 155,
+  "holdout_wells_scored": 155,
+  "holdout_rows_scored": 754122,
+  "models_averaged": 1,
+  "pooled_rmse": 4.832197579363719,
+  "well_rmse": {
+    "mean": 3.8605314991765973,
+    "q50": 3.0824800461914523,
+    "q75": 4.781082994647471,
+    "q95": 10.494749557947989,
+    "q99": 13.168358315436821,
+    "mean_lt_q95": 3.3927334696348113
+  },
+  "pooled_rmse_raw": 4.86407644530598,
+  "well_rmse_raw": {
+    "mean": 3.896009504294358,
+    "q50": 3.1118064076927276,
+    "q75": 4.8522754009037605,
+    "q95": 10.533582135595548,
+    "q99": 13.223269665647974,
+    "mean_lt_q95": 3.427984704507158
+  },
+  "pooled_rmse_geo_prior_baseline": 11.571564584301505,
+  "md_phases": [
+    0
+  ],
+  "inference_sec": 16.10858890000236,
+  "reparameterised": true
+}

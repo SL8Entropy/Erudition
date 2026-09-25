@@ -96,6 +96,13 @@ def score(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, tr
         drop_last=False,
     )
 
+    import time
+    import torch
+
+    cuda = str(cfg.device).startswith("cuda")
+    if cuda:
+        torch.cuda.synchronize()
+    t_start = time.perf_counter()
     if len(seq_NN_train.resolve_md_phases(cfg)) > 1:
         pred_df = seq_NN_train.predict_with_md_phase_tta(
             models,
@@ -115,6 +122,14 @@ def score(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, tr
         pred_df = seq_NN_train.make_prediction_df(
             pred_sum, metas, cfg, include_target=True, apply_smooth=False
         )
+    if cuda:
+        torch.cuda.synchronize()
+    infer_sec = time.perf_counter() - t_start
+    log(
+        f"inference wall time: {infer_sec:.2f}s for {len(holdout_wells):,} wells "
+        f"({infer_sec / max(len(holdout_wells), 1) * 1000:.1f} ms/well, data loading and "
+        f"post-processing included, geo prior excluded)"
+    )
     if getattr(cfg, "pred_sg_smooth", False):
         pred_df = seq_NN_train.apply_pred_sg_smooth(pred_df, cfg)
     pred_df = seq_NN_train.add_geo_prior_diagnostic_columns(pred_df, val_geo_prior)
@@ -131,6 +146,8 @@ def score(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, tr
     )
     metrics["models_averaged"] = int(len(models))
     metrics["md_phases"] = list(seq_NN_train.resolve_md_phases(cfg))
+    metrics["inference_sec"] = float(infer_sec)
+    metrics["reparameterised"] = bool(getattr(cfg, "reparam_at_inference", False))
     scored = metrics["holdout_wells_scored"]
     if scored != len(holdout_wells):
         raise RuntimeError(
@@ -225,6 +242,17 @@ def run(args):
             if output_dir_existed and cfg.f == 1:
                 main_module.log(f"WARNING: output directory already exists: {cfg.output_dir}")
             models = main_module.load_models(models_dir, cfg)
+            cfg.reparam_at_inference = bool(args.reparam)
+            if args.reparam:
+                if not hasattr(seq_NN_train, "reparameterize_for_inference"):
+                    raise RuntimeError(
+                        f"{source_dir} has no reparameterize_for_inference; pass "
+                        "--source-dir experiments/bilzard"
+                    )
+                for model in models.values():
+                    n = seq_NN_train.reparameterize_for_inference(model, log=main_module.log)
+                    if n == 0:
+                        main_module.log("reparam: no multi-branch blocks found (nothing to collapse)")
             score(
                 cfg,
                 main_module,
@@ -261,13 +289,23 @@ def build_parser():
         help="Average the prediction over this many MD column-grid phases (8 matches "
              "the 2nd-place solution). Omit to keep the single archived grid.",
     )
+    parser.add_argument(
+        "--reparam", action="store_true",
+        help="Collapse MobileOne/FastViT training-time branches before inference "
+             "(same function up to float rounding, faster). No effect on ConvNeXt.",
+    )
     parser.add_argument("--train-frac", type=float, default=holdout.DEFAULT_TRAIN_FRAC)
     parser.add_argument("--settings", type=Path)
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--device")
     parser.add_argument("--well-limit", type=int)
     parser.add_argument("--val-batch-size", type=int)
-    parser.add_argument("--num-workers", type=int)
+    parser.add_argument(
+        "--num-workers", type=int, default=0,
+        help="DataLoader workers (default 0). On Windows, starting workers costs ~13-15 s, more "
+             "than building all 155 holdout inputs in the main process (~8 ms each); predictions "
+             "are identical either way.",
+    )
     parser.add_argument("--f", type=int, choices=[0, 1])
     parser.add_argument("--offline-timm", action="store_true")
     # Accepted so repro.apply_cli_overrides finds every attribute it reads.

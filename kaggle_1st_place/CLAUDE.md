@@ -1099,3 +1099,130 @@ Trained 16:46-19:35 (2 h 49 min). Holdout pooled **4.8402** (pre-SG 4.8718), tes
 - Report updated (§1, 4.1, 4.2, 4.10, 9.1, 9.5). The paper framing is "FastViT taught by
   ConvNeXt-small matches its teacher at ~40% less inference". The claim over FastViT alone passes
   on one seed; the claim over the teacher does not.
+
+### FastViT attention and reparameterisation (2026-09-22)
+
+Trained `cnx_fastvit_kd_small` U-Net, idle GPU, bf16, 19.6 ms total. Per-stage times, from
+scratchpad `stage_time.py`:
+- stages 0-2 (RepMixer) take 3.35 / 3.16 / 4.38 ms.
+- stage 3 (2 attention blocks on 22x13 = 286 tokens) takes **1.58 ms, 8%**; 0.49 ms per block.
+
+Editing the attention can save at most ~1.6 ms.
+
+**Reparameterisation is not applied at inference today.** 23 MobileOne blocks were still
+multi-branch. `timm.utils.model.reparameterize_model(net.backbone_stages)` gives
+18.6 -> **14.6 ms (-22%)**. The fp32 output relative diff is 1.9e-4, 20x smaller than the bf16
+drift already accepted. No retraining is needed. Not yet wired into scoring or checked on holdout RMSE.
+
+Architecture-only screen (scratchpad `fastvit_variants.py`), ms before / after reparam:
+
+    fastvit_t12    6.4M backbone, no attention     18.4 / 13.1
+    fastvit_sa12  10.4M, attention in last stage   18.9 / 14.0
+    fastvit_sa24  20.4M                            29.3 / 22.1
+    fastvit_sa36  30.3M                            38.4 / 25.2
+
+New recipes, both teacher `0801_V2_ep150`, weights not yet downloaded:
+- `cnx_fastvit_sa24_kd_small` -- capacity at today's sa12 cost once reparameterised.
+- `cnx_fastvit_t12_kd_small` -- the attention ablation.
+
+### Reparam wired into scoring; controlled benchmark; SA24/T12 weights (2026-09-22)
+
+**Weights:** `fastvit_sa24.apple_dist_in1k` (86.6 MB) and `fastvit_t12.apple_dist_in1k` (30.4 MB),
+sha256 verified; both load offline.
+
+**Reparam in scoring:**
+- `seq_NN_train.reparameterize_for_inference(model, log)` (experiments/bilzard) collapses pending
+  MobileOneBlock / RepMixer branches via `timm.utils.model.reparameterize_model(inplace=True)`.
+  It is idempotent and a no-op on ConvNeXt.
+- Called in `kfold_training` right after `run_training` (so the final holdout prediction and the
+  saved models.pkl are merged) and at the start of `predict_models`.
+- Controlled by `cfg.reparam_at_inference`, default True.
+- `seq_NN_rescore.py --reparam` does the same for finished runs, and the script now logs
+  full-pipeline inference wall time.
+
+Rescore results (the plain path reproduces the stored score):
+- `cnx_fastvit_kd_small` plain 4.8397 (stored 4.8402), **merged 4.8322**, 33 blocks, 115 -> 104 ms/well.
+- `cnx_fastvit` merged 5.2291 (plain 5.2134).
+- Rounding-level either way.
+- Full pipeline: small 123, tiny 106, fastvit 103-115 ms/well. It is CPU-dominated, with ±10 ms
+  run-to-run spread.
+- Outputs: `results/cnx_fastvit_kd_small_rescore_{plain,reparam}`.
+- `arch_v2_axial`'s snapshot lacks `resolve_md_phases`, so it can't be rescored with this script.
+
+**Controlled network benchmark** (scratchpad `bench_all.py`): one session, idle GPU, bf16,
+channels_last, 1x16x345x400, ms, merged in brackets. Absolute ms drift ~30% with laptop power
+state (the earlier session read small 37.5 / tiny 25), so compare within one session only.
+
+    small 26.1 | tiny 18.4 | nano 14.8 | base 36.6 | inception_next_tiny 19.7 | axial ConvNeXt 29.2
+    fastvit_sa12 17.1 (12.6) | student sa12 17.0 (13.1) | t12 16.7 (12.0) | sa24 25.9 (17.7) | mobileone_s1 17.5 (11.9)
+
+Attention present: FastViT SA12/SA24 have 2/4 AttentionBlocks in the last stage (22x13 tokens);
+the axial redesign has 3 AxialMDAttention. None elsewhere, including the AnchorCNN.
+
+Report updated: the 4.1 table has attention and network-time columns, §6 has a new timing
+table, §6.3 covers merging, §6.4 (new) covers attention in every model, and §9.1 has the
+SA24/T12 commands. Stale timings from the 37.5 ms session were reconciled.
+
+### Where per-well inference time goes (2026-09-22) -- corrects "several passes per well"
+
+Measured with scratchpad `pipeline_split.py`: `cnx_fastvit_kd_small`, same setup as the rescore
+script, desktop apps using the GPU (~30%), so absolute numbers are noisy.
+
+- **155 network inputs for 155 wells: exactly one pass per well** (16x345x400, batch 4, 4 loader workers).
+- Geo prior ~66 ms/well (CPU).
+- Loader alone ~100 ms/well (CPU, 4 workers).
+- Network alone 21.4 ms, or 16.5 merged (GPU).
+- Post-processing (prediction df + SG smoothing) 4-6 ms.
+- The real overlapped loop is 125-172 ms/well: loader-bound, so the GPU mostly idles.
+- Network ≈ 10% of the ~180 ms total.
+
+The earlier "merging saved 11 ms because of several passes per well" was wrong; that difference
+was noise. Next speed target: the loader / input building (step 2), then the geo prior. Neither
+is profiled internally yet.
+
+### CPU inference profiled and sped up (2026-09-22) -- all outputs bit-identical
+
+Scratchpad: `profile_inputs.py`, `profile_geo.py`, `workers_test.py`, `compare_items.py`.
+
+**What the "~100 ms/well CPU input building" really was:** Windows DataLoader worker start-up.
+A fresh 4-worker loader costs ~13-15 s once, which spread over 155 wells looks like ~90 ms/well.
+
+    predict loop, merged student   fresh 4 workers 105.9 | 0 workers 36.9 | 4 workers already alive 18.8 ms/well
+
+Predictions are identical for 0 vs 4 workers. Training's val loader is persistent, so training runs
+pay the start-up once.
+
+**Changes:**
+1. `seq_NN_dataset._make_unet_static_input`: channels are written once into a preallocated float32
+   array. This replaces an `astype` -> `np.stack` -> `astype` triple copy of ~8.8 MB.
+   Input build **12.5 -> 8.3 ms/well**. All 155 items are bit-identical. Training also benefits.
+2. `seq_NN_geo_prior.load_geo_wells`: a per-well parsed-CSV cache at `data/.geo_cache/<split>/<well>.npz`
+   (121 MB, git-ignored via `*.npz`), keyed on (version, CSV size, mtime_ns). It stores the
+   pandas-computed centroids, and writes are atomic via `os.replace`. CSV parsing had been 77% of the prior.
+3. `seq_NN_geo_prior._kd_workers`: `cKDTree.query` uses `workers=1` below 200k query points.
+   `workers=-1` started 2,477 threads (~1 s) for the 155-well prior. Results are identical for
+   any thread count.
+4. `seq_NN_rescore.py --num-workers` now defaults to 0.
+
+**Result, end-to-end rescore of the merged student:**
+- Geo prior 8.4 s -> **1.2 s**.
+- Inference loop 16.1 s -> **5.9 s (38 ms/well)**.
+- Pooled 4.8322 is unchanged, and the predictions are identical to the earlier merged rescore (max diff 0.0).
+- Steady-state per well, one at a time: geo ~8 ms + inputs ~8 ms + network ~13 ms + post ~4 ms.
+
+**Not done:** the remaining geo time is loading 773 small npz files (~2 s under the profiler);
+one consolidated file per split would cut it further.
+
+### Report rewritten for precision (2026-09-22)
+
+- `Erudition_Report_2026-09-22.md` replaces `Erudition_Report_2026-09-21.md`. The old file is
+  still on disk because it holds uncommitted edits; the user decides whether to delete it.
+- The study notes were rewritten to match.
+- Verdict rules used throughout: Confirmed = k*≥10 and ≥90% of 2,000 bootstrap draws;
+  Probable = k*≥10 and 70-90%; Not shown = k*<10 or below the 0.39 ft noise.
+- Added acceptance tests:
+  - `cnx_fastvit_kd` vs `cnx_fastvit`: k*=43, 91.1%, ACCEPT.
+  - `cnx_tiny` vs `0801_V2`: k*=4, 66.9%, REJECT.
+  - `cnx_fastvit_kd_small` vs `cnx_tiny`: k*=8, 62.5%, REJECT.
+- Flattery (picked minus late avg), per run: small 0.142, tiny 0.147, rb_v2_synth 0.149,
+  fastvit 0.067, fastvit_kd 0.151, fastvit_kd_small 0.096. It is not a uniform 0.14-0.15.

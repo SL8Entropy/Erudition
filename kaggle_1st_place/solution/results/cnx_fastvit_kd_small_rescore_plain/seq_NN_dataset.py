@@ -2188,11 +2188,11 @@ def _make_unet_static_input(
                 raise ValueError(f"GR difference std must be positive, got {diff_std}")
             if name == "gr_abs_diff":
                 channel = _make_gr_abs_diff_channel(gr, gr_nan_rate, tw_gr, tw_gr_is_nan, diff_std)
-                channels.append(channel)
+                channels.append(channel.astype("float32"))
                 continue
             if name == "gr_signed_diff":
                 channel = _make_gr_signed_diff_channel(gr, gr_nan_rate, tw_gr, tw_gr_is_nan, diff_std)
-                channels.append(channel)
+                channels.append(channel.astype("float32"))
                 continue
             signed_diff = (gr[:, None] - tw_gr[None, :]) / np.float32(diff_std)
             if name == "gr_compression_residual":
@@ -2406,19 +2406,8 @@ def _make_unet_static_input(
                 channel[~pf_features[valid_key], :] = 0.0
         else:
             raise ValueError(f"unknown unet static channel: {name}")
-        channels.append(channel)
-    # Write each channel once into the output.  The previous astype -> np.stack -> astype chain
-    # copied the ~8.8 MB input three times; assignment performs the same float32 cast, so the
-    # result is bit-identical (checked on all 155 holdout wells).
-    out = np.empty((len(channels), horizontal_len, typewell_len), dtype=np.float32)
-    for idx, channel in enumerate(channels):
-        if channel.shape != (horizontal_len, typewell_len):
-            raise ValueError(
-                f"unet static channel {cfg.unet_static_channels[idx]!r} has shape {channel.shape}, "
-                f"expected {(horizontal_len, typewell_len)}"
-            )
-        out[idx] = channel
-    return out
+        channels.append(channel.astype("float32"))
+    return np.stack(channels, axis=0).astype("float32")
 
 
 def _pf_tvt_meta_key(cfg):

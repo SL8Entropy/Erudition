@@ -16,7 +16,6 @@ contract. The older tangent ``idw_dS_xy`` mode remains available for ablation:
 from __future__ import annotations
 
 import math
-import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -154,14 +153,6 @@ def _anisotropy_transform_xy(xy: np.ndarray, angle_deg: float, ratio: float) -> 
     return np.column_stack([along / ratio, cross])
 
 
-def _kd_workers(n_queries: int) -> int:
-    """Thread count for cKDTree.query.  `workers=-1` starts one thread per core on every call,
-    which cost more than the search itself for a single well's queries (2,477 thread starts,
-    ~1 s of the 155-well prior).  Each query point is answered independently, so the result is
-    identical for any thread count; parallelism is kept for genuinely large queries."""
-    return -1 if n_queries >= 200_000 else 1
-
-
 def _point_metric_xy(xy: np.ndarray, cfg: GeoPriorConfig) -> np.ndarray:
     if cfg.point_neighbor_metric == "euclidean":
         return xy.astype(np.float64, copy=False)
@@ -204,62 +195,9 @@ def _read_horizontal(path: Path, well_id: str) -> GeoWell:
     )
 
 
-# Parsing the horizontal CSVs was ~77% of the geo prior's time (7.6 of 9.9 s for the 155 holdout
-# wells; the 618 support wells are re-parsed on every call).  Each well's parsed arrays are
-# stored once, uncompressed, next to the data (`<data dir>/.geo_cache/<split>/<well>.npz`) and
-# reloaded from there.  The cache holds the exact values `_read_horizontal` produced, including
-# the pandas-computed centroids, so the prior is bit-identical.  It is keyed on the CSV's size
-# and modification time, so an edited CSV is re-parsed.
-GEO_CACHE_VERSION = 1
-
-
-def _geo_cache_file(path: Path, well_id: str) -> Path:
-    return path.parent / ".geo_cache" / path.name / f"{well_id}.npz"
-
-
-def _read_horizontal_cached(path: Path, well_id: str) -> GeoWell:
-    csv = path / f"{well_id}__horizontal_well.csv"
-    stat = csv.stat()
-    stamp = np.asarray([GEO_CACHE_VERSION, stat.st_size, stat.st_mtime_ns], dtype=np.int64)
-    cache = _geo_cache_file(path, well_id)
-    if cache.exists():
-        try:
-            with np.load(cache, allow_pickle=False) as z:
-                if np.array_equal(z["stamp"], stamp):
-                    return GeoWell(
-                        well_id=str(well_id),
-                        md=z["md"], x=z["x"], y=z["y"], z=z["z"],
-                        tvt=z["tvt"] if bool(z["has_tvt"]) else None,
-                        tvt_input=z["tvt_input"],
-                        suffix_start=int(z["suffix_start"]),
-                        centroid_x=float(z["centroid"][0]),
-                        centroid_y=float(z["centroid"][1]),
-                    )
-        except (OSError, KeyError, ValueError):
-            pass  # unreadable or stale cache: fall through and rebuild it
-    well = _read_horizontal(path, well_id)
-    try:
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        tmp = cache.with_name(f"{cache.stem}.{os.getpid()}.tmp.npz")
-        np.savez(
-            tmp,
-            stamp=stamp,
-            md=well.md, x=well.x, y=well.y, z=well.z,
-            tvt=well.tvt if well.tvt is not None else np.empty(0, dtype=np.float32),
-            has_tvt=np.asarray(well.tvt is not None),
-            tvt_input=well.tvt_input,
-            suffix_start=np.asarray(well.suffix_start, dtype=np.int64),
-            centroid=np.asarray([well.centroid_x, well.centroid_y], dtype=np.float64),
-        )
-        os.replace(tmp, cache)  # atomic, so a concurrent run never reads a half-written file
-    except OSError:
-        pass  # a read-only data directory just means no cache
-    return well
-
-
 def load_geo_wells(path: str | Path, well_ids) -> dict[str, GeoWell]:
     path = Path(path)
-    return {str(well_id): _read_horizontal_cached(path, str(well_id)) for well_id in well_ids}
+    return {str(well_id): _read_horizontal(path, str(well_id)) for well_id in well_ids}
 
 
 def _mean_bins(values: np.ndarray, valid: np.ndarray, bin_size: int) -> np.ndarray:
@@ -588,7 +526,7 @@ def _predict_idw(
     train_metric_xy = _point_metric_xy(train_xy, cfg)
     query_metric_xy = _point_metric_xy(query_xy, cfg)
     tree = cKDTree(train_metric_xy)
-    dist, idx = tree.query(query_metric_xy, k=k_eff, workers=_kd_workers(len(query_metric_xy)))
+    dist, idx = tree.query(query_metric_xy, k=k_eff, workers=-1)
     if k_eff == 1:
         dist = dist[:, None]
         idx = idx[:, None]
@@ -686,7 +624,7 @@ def _concat_support(
     max_points = int(cfg.max_train_points)
     if max_points > 0 and xy.shape[0] > max_points:
         qtree = cKDTree(query_xy.astype(np.float64, copy=False))
-        dist, _ = qtree.query(xy.astype(np.float64, copy=False), k=1, workers=_kd_workers(len(xy)))
+        dist, _ = qtree.query(xy.astype(np.float64, copy=False), k=1, workers=-1)
         keep = np.argpartition(dist, max_points - 1)[:max_points]
         keep.sort()
         xy = xy[keep]
