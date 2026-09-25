@@ -1,0 +1,25 @@
+# Knowledge Distillation Implementation Details
+
+## 1. How does it work?
+The knowledge distillation focuses on transferring the uncertainty and multi-modal beliefs of a stronger teacher model (or ensemble of teachers) to a smaller, faster student model (like `fastvit_sa12`). 
+
+Because geological rock layers repeat, the model's posterior distribution is often bimodal or multi-modal—meaning multiple different depths might look equally plausible for a given horizontal well segment. A standard hard label discards this ambiguity. By minimizing the **Kullback-Leibler (KL) Divergence** `KL(teacher || student)` between the teacher's depth probability distribution and the student's, the student learns exactly which *other* alternative depths the teacher found plausible. If an ensemble of teachers is used, their softmax probabilities are averaged together to form a "mixture distribution" for the student to target.
+
+## 2. Where is the code placed?
+The implementation lives in the Bilzard experimental fork, specifically inside **`kaggle_1st_place/solution/experiments/bilzard/seq_NN_train.py`**.
+It is primarily handled by two custom functions:
+*   `load_distill_teacher(cfg, device, log)`: Loads one or more trained model checkpoints (using `cfg.distill_teacher_dirs`), places them in `.eval()` mode, and freezes them with `requires_grad_(False)`.
+*   `distill_alignment_loss(...)`: Computes the actual KL Divergence loss over the depth axis using a temperature parameter.
+
+## 3. When is it run?
+It runs **live during every single training step** of the student model. 
+Inside the main training loop in `seq_NN_train.py`, right before the non-finite loss check, the code passes the current training batch through the frozen teacher(s) using `torch.no_grad()`. 
+Because the training data heavily utilizes on-the-fly synthetic well generation (`z_shift` simulations) and augmentations, the teacher evaluates the exact same augmented synthetic batches the student is seeing in real-time. This effectively generates high-quality "pseudo-labels" for infinite synthetic data variations.
+
+## 4. What is added to the student model, concretely?
+**Architecturally, nothing is added to the student model.** It remains the exact same lightweight architecture (e.g., FastViT). 
+
+What is added is a **new penalty term to the student's loss function**. 
+Concretely, both the teacher and student models output an array called `alignment_logits` (shape: `[batch, depths, columns]`). The `distill_alignment_loss` applies a softmax with a temperature scaling factor (`cfg.distill_temperature`) to these logits, calculates the KL divergence between them, and scales the result by Temperature squared. 
+This term is then multiplied by `cfg.distill_weight` and simply added to the student's standard Cross-Entropy loss before backpropagation:
+`loss = loss + distill_weight * distill_term`
