@@ -6,8 +6,10 @@ continuous from the known anchor, so a forward-backward pass that forbids large 
 between neighbouring MD columns should pick the right band.
 
     python posterior_fb_decode.py results/baseline_check_posterior
+    python posterior_fb_decode.py results/baseline_check_posterior_all --all
 
-Reads the focus wells saved by seq_NN_posterior_dump.py. Nothing is tuned on the
+Reads the focus wells saved by seq_NN_posterior_dump.py, or with --all every holdout
+well from a dump made with --save-all (the fair test: 16 hand-picked wells are not). Nothing is tuned on the
 holdout: the transition is set from TRAINING wells, where the TVT change per 32 ft
 column has std 0.78 ft, q99 2.0 ft and max 8.6 ft (16 training wells measured).
 
@@ -19,7 +21,6 @@ where it locks onto a wrong one -- the same reason arg-max decoding loses to the
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -52,9 +53,18 @@ def forward_backward(p, x, k=None, start_sig=2.0):
     return (g * x).sum(1), (a * x).sum(1)
 
 
-def main(run):
-    run = Path(run)
-    z = np.load(run / "posterior_focus.npz")
+def main(argv=None):
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("run", type=Path, help="output dir of seq_NN_posterior_dump.py")
+    ap.add_argument("--all", action="store_true", help="use posterior_all.npz (needs --save-all dump)")
+    args = ap.parse_args(argv)
+    run, tag = args.run, ("all" if args.all else "focus")
+    npz = run / f"posterior_{tag}.npz"
+    if not npz.is_file():
+        raise SystemExit(f"{npz} not found" + ("; rerun the dump with --save-all" if args.all else ""))
+    z = np.load(npz)
     x = z["levels"].astype(float)
     cols = pd.read_parquet(run / "posterior_columns.parquet")
     wells = pd.read_csv(run / "posterior_wells.csv").set_index("well_id")
@@ -74,10 +84,12 @@ def main(run):
     N = df.rows.sum()
     out = {k: float(np.sqrt(df[f"sse_{k}"].sum() / N)) for k in ("mean", "smoothed", "forward")}
     print(df[["well_id", "rows", "rmse_mean", "rmse_smoothed", "rmse_forward"]].round(2).to_string(index=False))
-    print("pooled over focus wells:", {k: round(v, 3) for k, v in out.items()})
-    df.to_csv(run / "fb_decode_focus.csv", index=False)
-    (run / "fb_decode_focus.json").write_text(json.dumps(out, indent=2))
+    improved = int((df.rmse_smoothed < df.rmse_mean).sum())
+    print(f"pooled over {len(df)} {tag} wells:", {k: round(v, 3) for k, v in out.items()},
+          f"| smoothed beats mean on {improved}/{len(df)} wells")
+    df.to_csv(run / f"fb_decode_{tag}.csv", index=False)
+    (run / f"fb_decode_{tag}.json").write_text(json.dumps({**out, "wells": len(df), "improved": improved}, indent=2))
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main()

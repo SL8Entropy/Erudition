@@ -25,6 +25,12 @@ Outputs, in ``--output-dir``:
     posterior_wells.csv        one row per holdout well
     posterior_columns.parquet  one row per (well, MD column): the posterior's summary
     posterior_focus.npz        full posteriors for the focus wells, for plotting
+    posterior_all.npz          full posteriors for EVERY holdout well (only with --save-all,
+                               ~40 MB); same keys as the focus file, so decoder ideas can be
+                               scored on all 155 wells instead of 16 hand-picked ones
+
+    python seq_NN_posterior_dump.py --id 0801_V2 --models-dir results/baseline_check ^
+        --output-dir results/baseline_check_posterior_all --save-all --device cuda --offline-timm
 """
 
 from __future__ import annotations
@@ -46,7 +52,7 @@ HARD_WELLS = ("d7eb0be8", "f2d4c8c9", "f6bc699b", "f6d009f4", "f8afa78a", "fb090
 N_WORST = 10     # plus this run's own worst wells by squared error
 N_CONTROL = 6    # plus wells around the median, as a reference for what "normal" looks like
 
-_EXTRA = {"models_dir": None}
+_EXTRA = {"models_dir": None, "save_all": False}
 
 
 def _row_bins(meta, cfg):
@@ -97,6 +103,22 @@ def _forward_all(models, loader, cfg, seq_NN_train):
         metas = these
     k = float(len(models))
     return prob_sum / k, pred_sum / k, metas
+
+
+def _save_posteriors(path, well_ids, per_well_inputs, prob, x):
+    """Per-column posteriors (float16) plus column bins, truth and geo prior, per well."""
+    save = {"levels": x.astype(np.float32), "focus": np.array(well_ids)}
+    for wid in well_ids:
+        if wid not in per_well_inputs:
+            continue
+        row_bin, y_row, geo_row, tvt0, i = per_well_inputs[wid]
+        used = np.unique(row_bin)
+        save[f"{wid}__p"] = prob[i][used].astype(np.float16)
+        save[f"{wid}__bins"] = used.astype(np.int16)
+        save[f"{wid}__y"] = np.array([np.nanmean(y_row[row_bin == b]) for b in used], dtype=np.float32)
+        if geo_row is not None and geo_row.size == row_bin.size:
+            save[f"{wid}__geo"] = np.array([np.nanmean(geo_row[row_bin == b]) for b in used], dtype=np.float32)
+    np.savez_compressed(path, **save)
 
 
 def collect(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, train_frac):
@@ -203,18 +225,11 @@ def collect(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, 
             cols.append({"well_id": w["well_id"], **c})
     pd.DataFrame(cols).to_parquet(out / "posterior_columns.parquet")
 
-    save = {"levels": x.astype(np.float32), "focus": np.array(focus)}
-    for wid in focus:
-        if wid not in per_well_inputs:
-            continue
-        row_bin, y_row, geo_row, tvt0, i = per_well_inputs[wid]
-        used = np.unique(row_bin)
-        save[f"{wid}__p"] = prob[i][used].astype(np.float16)
-        save[f"{wid}__bins"] = used.astype(np.int16)
-        save[f"{wid}__y"] = np.array([np.nanmean(y_row[row_bin == b]) for b in used], dtype=np.float32)
-        if geo_row is not None and geo_row.size == row_bin.size:
-            save[f"{wid}__geo"] = np.array([np.nanmean(geo_row[row_bin == b]) for b in used], dtype=np.float32)
-    np.savez_compressed(out / "posterior_focus.npz", **save)
+    _save_posteriors(out / "posterior_focus.npz", focus, per_well_inputs, prob, x)
+    if _EXTRA["save_all"]:
+        every = tuple(w["well_id"] for w in wells)
+        _save_posteriors(out / "posterior_all.npz", every, per_well_inputs, prob, x)
+        log(f"saved posteriors for all {len(every)} wells: {out / 'posterior_all.npz'}")
 
     # headline
     pr = report["pooled_rmse"]
@@ -242,12 +257,16 @@ def collect(cfg, main_module, seq_NN_train, models, train_wells, holdout_wells, 
 
 
 def main(argv=None):
-    args = rescore.build_parser().parse_args(argv)
+    parser = rescore.build_parser()
+    parser.add_argument("--save-all", action="store_true",
+                        help="also write posterior_all.npz with every holdout well's posterior")
+    args = parser.parse_args(argv)
     if args.offline_timm:
         os.environ.setdefault("HF_HUB_OFFLINE", "1")
     if args.tta is not None and args.tta > 1:
         raise SystemExit("--tta is not supported here: phase-shifted grids have different columns")
     _EXTRA["models_dir"] = str(args.models_dir.expanduser().resolve())
+    _EXTRA["save_all"] = bool(args.save_all)
     rescore.score = collect  # everything else in rescore.run is reused unchanged
     return rescore.run(args)
 
