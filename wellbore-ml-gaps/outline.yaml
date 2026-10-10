@@ -1,0 +1,124 @@
+topic: >
+  Wellbore geology prediction (ROGII geosteering / TVT prediction) and the machine-learning
+  solutions developed for it -- identify gaps in the Erudition implementation and additions
+  that could lower holdout RMSE.
+created: 2026-09-28
+time_range: since 2020 (classic references allowed where they are the foundation)
+
+context: |
+  Erudition reproduces the ROGII Kaggle 1st-place solution (ConvNeXt U-Net over a 16-channel
+  345 MD-column x 400 TVT-level cost image, per-column softmax over depth, expectation decode,
+  85% synthetic training wells) and the 2nd-place AnchorCNN + DP. Best single model: FastViT-SA12
+  distilled from ConvNeXt-small, 4.84 ft on 155 holdout wells; best pair 4.69 ft.
+  Error anatomy (60-epoch baseline, 5.47 ft): ~51% of squared error from choosing / blending the
+  wrong repeated band (wrong_mode 24%, blend 15%, multimodal_miss 12%), ~25% a single hump drifting
+  (one straight-line drift per well), ~13% broad/skewed humps. Oracle best-mode decode 4.27 ft.
+  Already failed: XY geo-prior hump picking, post-hoc forward-backward continuity decode, learned
+  per-point gates between ConvNeXt and AnchorCNN, AcfNet-style unimodal target (60 ep), axial
+  attention (60 ep), RAFT refinement (60 ep). Noise floor: +-0.39 ft per single-run comparison.
+  Key metric fact: for pooled RMSE the expectation decode is Bayes-optimal for a calibrated
+  posterior, so band-confusion error falls only via MORE EVIDENCE or BETTER CALIBRATION.
+
+items:
+  # ---------- A. The problem itself: geosteering & well-log correlation ----------
+  - id: A01
+    name: Manual / commercial geosteering practice (typewell correlation, TVT modelling, ROGII StarSteer)
+    why: How human experts break repeated-layer ties; defines the domain constraints a model should respect.
+  - id: A02
+    name: Expert decision-making in geosteering (Geosteering World Cup studies, 349 participants, 2025)
+    why: Human baseline for resolving ambiguity; what cues experts use that our model lacks.
+  - id: A03
+    name: Dynamic Time Warping for well-log correlation (classic + constrained variants)
+    why: Classical alignment baseline; limits on laterals that go up and down through strata.
+  - id: A04
+    name: DP geosteering patents (US 11180981 Chevron; US 11480045 RNA Capital, likely ROGII-linked)
+    why: Industrial DP over non-monotone lateral-to-typewell mappings; supports/extends the 2nd-place DP design.
+  - id: A05
+    name: Bayesian / particle-filter geosteering (NORCE, Alyaev et al.)
+    why: Lineage of our tracker and Ruby's 7.35 ft PF.
+  - id: A06
+    name: Ensemble Kalman / ensemble-based geosteering and well-log interpretation (DISTINGUISH, 2021+)
+    why: Ensemble uncertainty propagation; alternative to per-column softmax.
+  - id: A07
+    name: Reinforcement-learning geosteering and the NORCE/UiS geosteering robot line (2024-2026)
+    why: PF+RL robots benchmarked against experts; decision-driven framing.
+  - id: A08
+    name: Deep-learning automated geosteering (GAN earth models, CNN/LSTM relative-position predictors, GenAI decision support)
+    why: Direct DL approaches to the same task.
+  - id: A09
+    name: Alyaev et al. multi-realization probabilistic log interpretation (SPWLA 2022) and direct multi-modal inversion (ESS 2022)
+    why: In-domain predecessor of a multi-hypothesis head -- K interpretations in one pass.
+  - id: A10
+    name: CNN / Siamese well-log depth matching (1D-CNN vs cross-correlation 2022, late-fusion 2024, Siamese SPWLA 2025, deep-Q 2021, SPWLA depth-shifting contest)
+    why: Learned similarity embeddings could replace hand-made gr_abs_diff cost channels.
+  - id: A11
+    name: Transformer / foundation models for well logs (WLFM, LithoFormer, TS foundation model for logs, TGS promptable model, CMT-Hiformer)
+    why: Pretrained GR encoders as extra channels; geology-constrained losses.
+  - id: A12
+    name: Multi-well correlation via relative geologic time and loop consistency (Sylvester 2023, graph/sequence methods)
+    why: Principled use of neighbour/sibling wells -- replacement for the failed XY geo-prior.
+  - id: A13
+    name: Mahto 2026 "Learning-Driven Autonomy Pipeline for Horizontal Wellbore Geology Prediction" (Research Square)
+    why: In literature review, uses this competition's data. Web search could not locate it -- verify citation.
+  - id: A14
+    name: ROGII 3rd place -- five candidate trajectories (HMM, PF, 2 NNs, Adaptive 1D SDF) + sequential SoftMax gate
+    why: Diverse-candidates-plus-gate; CV 5.29 vs private 5.84 gap is a warning about selection.
+  - id: A15
+    name: ROGII silver structural-coordinate tracker (EdidiongA; u = TVT + Z, explicit dip state, banded trellis, windowed GR correlation)
+    why: Explicit dip state attacks the drift mode; cheap CPU ensemble member.
+  - id: A16
+    name: ROGII 14th place hierarchical U-Net stack with seed averaging (keithtyser)
+    why: Independent validation of our recipe family; coarse-to-fine stacking variant.
+  - id: A17
+    name: Other ROGII writeups and repos (8th, 22nd, mycarta dcor toolkit, Lukyanenko blog, remaining top-30)
+    why: Unmined ideas -- distance-correlation cost, spatially grouped CV, failure modes.
+  - id: A18
+    name: Kaggle discussion identity TVT + Z - ANCC = const per well (~0.03 ft)
+    why: Possible hard physical constraint / channel that could remove drift; check what our inputs encode.
+  - id: A19
+    name: Public geosteering data beyond Kaggle (GWC 2020 typelog on DataverseNO, other open typelogs)
+    why: More realistic typelogs to diversify synthetic generator with hard repeated-layer cases.
+
+  # ---------- B. Transferable ML techniques ----------
+  - id: B01
+    name: Stereo matching cost-volume architectures (GC-Net, PSMNet, GA-Net/SGM-Net, AcfNet, RAFT-Stereo, IGEV/IGEV++, CREStereo)
+    why: Our model is a stereo network without the name; learned features, multi-range volumes, learned SGM aggregation.
+  - id: B02
+    name: Foundation-prior stereo (FoundationStereo, Fast-FoundationStereo, DEFOM-Stereo, MonSter)
+    why: How strong priors are added alongside matching; distillation + pruning recipes.
+  - id: B03
+    name: Multimodal stereo decoding and losses (ADL + dominant-modal estimator, SMD-Nets, Stereo Risk, top-k soft-argmax)
+    why: Handling multimodal disparity posteriors -- note mode-seeking decodes may raise RMSE.
+  - id: B04
+    name: Multi-hypothesis heads (mixture density networks, annealed MCL NeurIPS 2024, resilient MCL)
+    why: K band hypotheses + scores feeding a gate/reranker.
+  - id: B05
+    name: Differentiable alignment / structured DP losses (Mensch & Blondel, soft-DTW, Drop-DTW, Deep Declarative DTW, neural CRF/HMM)
+    why: Train end-to-end through a path-level DP -- the trained version of the failed post-hoc continuity decode.
+  - id: B06
+    name: Differentiable particle filters (survey 2023, normalizing-flow DPF, learned GMM proposals, semi-supervised DPF)
+    why: Bridges the U-Net posteriors (as learned emissions) with PF tracking.
+  - id: B07
+    name: Seismic horizon tracking and deep relative geologic time (Geng 2020, Wu 2020, Bi 2021, transformer RGT 2023, sinusoidal RGT 2026)
+    why: Monotone RGT-like output parameterisation with built-in consistency; repeating reflectors analogue.
+  - id: B08
+    name: Retinal-layer segmentation with topology constraints (He et al. 2021 MedIA column-softmax + soft-argmax, graph-search CNNs)
+    why: Near-identical output formulation with ordering/smoothness enforced inside the network.
+  - id: B09
+    name: Calibration and conformal prediction for histogram/classification-as-regression outputs (temperature/isotonic, conformal histogram regression, multimodal conformal, conformal under HMM)
+    why: Band-weight calibration directly bounds RMSE under the mean decode; per-well confidence for flagging.
+  - id: B10
+    name: Test-time adaptation / per-well self-supervision on the known prefix (TTL for time series, PETSA, closed-form offset/slope correction)
+    why: Uses known heel labels at test time; targets drift.
+  - id: B11
+    name: Synthetic data, domain randomisation and sim-to-real alignment (hard repeated-layer generation, pretrain-to-alignment 2026)
+    why: 85% synthetic training; a real-data alignment stage or harder synthetic cases may close gaps.
+  - id: B12
+    name: Efficient multi-scale decoders (BiFPN/EfficientDet, FPN variants) for dense full-resolution prediction
+    why: Teammate proposal; evaluate evidence that weighted bidirectional fusion helps dense regression at full resolution.
+
+execution:
+  batch_size: 4
+  items_per_agent: 2
+  output_dir: ./wellbore-ml-gaps/results
+  pairing_hint: consecutive items are grouped so related topics share an agent
