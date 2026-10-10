@@ -1,0 +1,95 @@
+{
+  "base": "results\\0801_V2_ep150\\holdout_predictions.pqt",
+  "treat": "results\\x_deepsup_ep150\\holdout_predictions.pqt",
+  "pred_col": "TVT_pred",
+  "wells": 155,
+  "rows": 754122,
+  "base_pooled_rmse": 4.978450417685836,
+  "treat_pooled_rmse": 4.746890227730009,
+  "delta_pooled_rmse": -0.23156018995582706,
+  "wells_improved": 90,
+  "wells_improved_share": 0.5806451612903226,
+  "k_star": 6,
+  "min_k": 10,
+  "verdict": "REJECT",
+  "top_contributors": [
+    {
+      "well_id": "d1457cc5",
+      "sse_gap": -863695.7216358185,
+      "rows": 6920,
+      "base_well_rmse": 11.654902680547753,
+      "treat_well_rmse": 3.320427084794272
+    },
+    {
+      "well_id": "d24ff243",
+      "sse_gap": 431252.02043914795,
+      "rows": 5641,
+      "base_well_rmse": 1.822772965379023,
+      "treat_well_rmse": 8.931521179870796
+    },
+    {
+      "well_id": "f2d4c8c9",
+      "sse_gap": -422891.8348350525,
+      "rows": 6249,
+      "base_well_rmse": 12.367234116953147,
+      "treat_well_rmse": 9.234444128723048
+    },
+    {
+      "well_id": "f5859199",
+      "sse_gap": -412781.59956645966,
+      "rows": 5790,
+      "base_well_rmse": 13.112617291889492,
+      "treat_well_rmse": 10.032376260078706
+    },
+    {
+      "well_id": "fdfd57da",
+      "sse_gap": -381886.8074865341,
+      "rows": 5236,
+      "base_well_rmse": 12.507672291931593,
+      "treat_well_rmse": 9.138218041831303
+    },
+    {
+      "well_id": "dc7f9757",
+      "sse_gap": -173925.86968517303,
+      "rows": 4360,
+      "base_well_rmse": 6.839249509385554,
+      "treat_well_rmse": 2.623752910752571
+    },
+    {
+      "well_id": "d543916f",
+      "sse_gap": -165329.1097574234,
+      "rows": 4799,
+      "base_well_rmse": 9.219196726970262,
+      "treat_well_rmse": 7.109349233221967
+    },
+    {
+      "well_id": "fb03ae90",
+      "sse_gap": 157537.4427947998,
+      "rows": 6431,
+      "base_well_rmse": 6.1738150352385945,
+      "treat_well_rmse": 7.912810010624602
+    },
+    {
+      "well_id": "f6d009f4",
+      "sse_gap": -143109.59330272675,
+      "rows": 6715,
+      "base_well_rmse": 8.756031290891178,
+      "treat_well_rmse": 7.4401718021953505
+    },
+    {
+      "well_id": "d6c320d9",
+      "sse_gap": -141693.2007818222,
+      "rows": 5452,
+      "base_well_rmse": 5.786616355568613,
+      "treat_well_rmse": 2.7378301145521413
+    }
+  ],
+  "bootstrap": {
+    "draws": 2000,
+    "mean": -0.23103409982112813,
+    "p05": -0.5252003539168114,
+    "p50": -0.22123251273598532,
+    "p95": 0.03761647617652283,
+    "share_improving": 0.9185
+  }
+}

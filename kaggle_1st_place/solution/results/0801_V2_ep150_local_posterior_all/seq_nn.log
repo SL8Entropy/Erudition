@@ -1,0 +1,41 @@
+[2026-09-29 20:27:16] loaded models pickle: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local\models.pkl folds=1
+
+######## setup #######
+[2026-09-29 20:27:16] posterior dump: models=1, holdout wells=155
+[2026-09-29 20:27:16] saved holdout split: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local_posterior_all\holdout_split.csv
+[2026-09-29 20:27:16] saved cfg pickle: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local_posterior_all\cfg.pkl
+
+######## holdout inference #######
+[2026-09-29 20:27:22] geo_prior idw_dS_xy_wls: rmse=11.57156469468045
+[2026-09-29 20:27:53] posteriors: (155, 345, 400) (samples, MD columns, depth levels)
+
+######## posterior analysis #######
+[2026-09-29 20:28:14] saved posteriors for all 155 wells: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local_posterior_all\posterior_all.npz
+[2026-09-29 20:28:14] 
+[2026-09-29 20:28:14] SANITY  model pred raw pooled RMSE 5.0025 (run reported 5.0028); max |pred - posterior mean| 0.0000 ft
+[2026-09-29 20:28:14] POOLED RMSE BY DECODER (raw, no SG smoothing):
+[2026-09-29 20:28:14]   mean                   5.0025
+[2026-09-29 20:28:14]   argmax                 5.2352
+[2026-09-29 20:28:14]   dominant_mode          5.0801
+[2026-09-29 20:28:14]   oracle_best_mode       4.5773
+[2026-09-29 20:28:14]   oracle_mean_or_mode    4.5241
+[2026-09-29 20:28:14]   minus_offset           3.7307
+[2026-09-29 20:28:14]   minus_line             3.0471
+[2026-09-29 20:28:14] SHARE OF POOLED SQUARED ERROR BY FAILURE TYPE:
+[2026-09-29 20:28:14]   ok                  11.7%
+[2026-09-29 20:28:14]   out_of_window        0.0%
+[2026-09-29 20:28:14]   unimodal_miss       45.4%
+[2026-09-29 20:28:14]   unimodal_offset     19.4%
+[2026-09-29 20:28:14]   blend                8.4%
+[2026-09-29 20:28:14]   wrong_mode           9.0%
+[2026-09-29 20:28:14]   multimodal_miss      6.1%
+[2026-09-29 20:28:14] multimodal columns (>=2 humps), share of rows: 9.2%
+[2026-09-29 20:28:14] HARD WELLS:
+[2026-09-29 20:28:14]   d7eb0be8  rmse  13.81  argmax  13.46  oracle-mode  12.53  minus-line  11.02  multimodal rows 29.6%  mostly multimodal_miss (55%)
+[2026-09-29 20:28:14]   f2d4c8c9  rmse   6.48  argmax   4.35  oracle-mode   3.84  minus-line   3.89  multimodal rows 42.1%  mostly blend (57%)
+[2026-09-29 20:28:14]   f6bc699b  rmse  19.32  argmax  19.65  oracle-mode  19.09  minus-line   8.49  multimodal rows  1.1%  mostly unimodal_miss (95%)
+[2026-09-29 20:28:14]   f6d009f4  rmse   8.39  argmax   6.32  oracle-mode   3.55  minus-line   7.98  multimodal rows 73.4%  mostly blend (58%)
+[2026-09-29 20:28:14]   f8afa78a  rmse  11.53  argmax  11.66  oracle-mode  11.51  minus-line   3.10  multimodal rows  1.6%  mostly unimodal_miss (98%)
+[2026-09-29 20:28:14]   fb0904bd  rmse  12.62  argmax  12.22  oracle-mode  12.62  minus-line   4.57  multimodal rows  0.0%  mostly unimodal_miss (91%)
+[2026-09-29 20:28:14] saved: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local_posterior_all\posterior_report.json
+[2026-09-29 20:28:14] saved print log: C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\0801_V2_ep150_local_posterior_all\seq_nn.log
