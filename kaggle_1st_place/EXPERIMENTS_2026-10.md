@@ -191,7 +191,9 @@ Design notes:
 
 ## 8. Corrections to earlier notes
 
-- `kaggle_1st_place/CLAUDE.md` says `z_shift.apply_prob` is 0.85; the configs say **0.75**.
+- `z_shift.apply_prob` is **0.85** in every run here: the `CFG` class default is 0.75, but the 0801_V2 recipe
+  overrides it (`make_seq_requested_ablation_cfgs`), and the run logs confirm 0.85. (An earlier version of this
+  log wrongly "corrected" it to 0.75.)
 - "The decoder holds ~0.05M parameters" is true only for the full-resolution parts; the three
   mid up-blocks hold ~4.07M (~10 GMAC).
 - US 11480045 is assigned to RNA Capital, not Chevron.

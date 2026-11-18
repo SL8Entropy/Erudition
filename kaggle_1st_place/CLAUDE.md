@@ -915,7 +915,7 @@ share the (345, 400) alignment grid.
 ### Correction: "pseudo-label synthetic wells" is already happening (2026-09-21)
 
 `seq_NN_dataset.py:6301` replaces each training sample with a `z_shift` simulation with
-probability `sim_cfg['z_shift']['apply_prob']` (0.75 in the configs; an earlier note said 0.85), and a simulated well carries its exact
+probability `sim_cfg['z_shift']['apply_prob']` (0.85: the class default is 0.75, but the 0801_V2 recipe overrides it in `make_seq_requested_ablation_cfgs`), and a simulated well carries its exact
 generated path as the label. So synthetic wells never needed pseudo-labels, and the distillation
 term in `seq_NN_train.py` already runs the teacher on every training batch -- 85% of which are
 synthetic. The Fast-FoundationStereo lesson (1.4M pseudo-labelled pairs) applies to large pools of
