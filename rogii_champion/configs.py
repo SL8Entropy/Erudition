@@ -221,6 +221,327 @@ SMOKE = BASE.clone(
 REGISTRY = {c.name: c for c in (BASE, V1, V2, V3, V4, V5, LOWAUG, SMOKE)}
 
 
+# ====================================================================== #
+# ABLATION CONFIGS                                                        #
+# ====================================================================== #
+
+# -- Group 1: Feature channel ablations -------------------------------- #
+ABL_NO_PF = BASE.clone(
+    name="abl_no_pf",
+    notes="Ablation: no particle-filter channels.",
+    use_pf=False,
+)
+ABL_NO_XY = BASE.clone(
+    name="abl_no_xy",
+    notes="Ablation: no XY-neighbour channels.",
+    use_xy=False,
+)
+ABL_CORE = BASE.clone(
+    name="abl_core_only",
+    notes="Ablation: core GR match only (no PF, no XY).",
+    use_pf=False, use_xy=False,
+)
+ABL_NO_PF_CORRUPT = BASE.clone(
+    name="abl_no_pf_corrupt",
+    notes="Ablation: PF channels present but never corrupted during training.",
+)
+ABL_NO_PF_CORRUPT.aug.p_pf_corrupt = 0.0
+
+ABL_TW_CORRECT_ONLY = BASE.clone(
+    name="abl_tw_correct_only",
+    notes="Ablation: typewell correction without sibling reference channels.",
+    correct_typewell=True, use_sibling=False,
+)
+ABL_V4_NO_SIB = V4.clone(
+    name="abl_v4_no_sib",
+    notes="Ablation: V4 config but with sibling channels disabled.",
+    use_sibling=False,
+)
+
+# -- Group 2: Augmentation ablations (drop-one) ------------------------ #
+_AUG_NOTES = {
+    "p_synth":           "Ablation: no synthetic well generation (1st place's #1 aug).",
+    "p_gr_affine":       "Ablation: no GR affine transform on typewell (1st place's #2 aug).",
+    "p_reverse":         "Ablation: no backwards traversal.",
+    "p_md_stretch":      "Ablation: no MD-axis stretching.",
+    "p_level_shift":     "Ablation: no vertical level shifting.",
+    "p_level_flip":      "Ablation: no vertical flip (4th place's physics-consistent flip).",
+    "p_struct_scale":    "Ablation: no structural slope scaling (2nd place's z_layer aug).",
+    "p_gr_noise_shift":  "Ablation: no GR residual circular shift.",
+    "p_gr_specaug":      "Ablation: no GR spectral masking.",
+    "p_tail_crop":       "Ablation: no random tail cropping.",
+    "p_tw_mask":         "Ablation: no typewell gap masking.",
+    "p_tw_jitter":       "Ablation: no typewell noise jitter.",
+    "p_hw_noise":        "Ablation: no horizontal-well GR noise.",
+    "p_prefix_resample": "Ablation: no visible-fraction randomisation.",
+    "p_channel_mask":    "Ablation: no random channel dropout at canvas level.",
+    "p_pf_corrupt":      "Ablation: no PF/XY corruption (anti-shortcut measure).",
+}
+for _ak, _note in _AUG_NOTES.items():
+    _short = _ak[2:]                     # e.g. "synth", "gr_affine", ...
+    _cfg = BASE.clone(name=f"abl_no_{_short}", notes=_note)
+    setattr(_cfg.aug, _ak, 0.0)
+    if _ak == "p_synth":
+        _cfg.synth_per_epoch = 0.0
+    REGISTRY[_cfg.name] = _cfg
+
+# No augmentation at all
+ABL_NO_AUG = BASE.clone(
+    name="abl_no_aug",
+    notes="Ablation: all augmentations disabled. Raw data only.",
+    synth_per_epoch=0.0,
+)
+for _ak in _AUG_NOTES:
+    setattr(ABL_NO_AUG.aug, _ak, 0.0)
+
+# Double augmentation load
+ABL_HI_AUG = BASE.clone(
+    name="abl_hi_aug",
+    notes="Ablation: 2x augmentation load (all probabilities doubled, capped at 1.0).",
+    synth_per_epoch=2.0,
+)
+for _ak in _AUG_NOTES:
+    setattr(ABL_HI_AUG.aug, _ak, min(getattr(ABL_HI_AUG.aug, _ak) * 2.0, 1.0))
+
+# -- Group 3: Loss weight ablations ----------------------------------- #
+ABL_NO_HUBER = BASE.clone(
+    name="abl_no_huber",
+    notes="Ablation: no expected-path Huber loss.",
+    w_huber=0.0,
+)
+ABL_NO_GR = BASE.clone(
+    name="abl_no_gr",
+    notes="Ablation: no GR penalty.",
+    w_gr=0.0,
+)
+ABL_HI_HUBER = BASE.clone(
+    name="abl_hi_huber",
+    notes="Ablation: 4x Huber weight (0.32).",
+    w_huber=0.32,
+)
+ABL_HI_GR = BASE.clone(
+    name="abl_hi_gr",
+    notes="Ablation: 4x GR penalty weight (0.08).",
+    w_gr=0.08,
+)
+ABL_TAU1 = BASE.clone(
+    name="abl_tau1",
+    notes="Ablation: sharper CE target (tau=1.0 ft).",
+    ce_tau=1.0,
+)
+ABL_TAU4 = BASE.clone(
+    name="abl_tau4",
+    notes="Ablation: broader CE target (tau=4.0 ft).",
+    ce_tau=4.0,
+)
+ABL_TAU8 = BASE.clone(
+    name="abl_tau8",
+    notes="Ablation: very broad CE target (tau=8.0 ft).",
+    ce_tau=8.0,
+)
+ABL_HARD_CE = BASE.clone(
+    name="abl_hard_ce",
+    notes="Ablation: near-hard one-hot CE target (tau=0.01).",
+    ce_tau=0.01,
+)
+ABL_VIS_W0 = BASE.clone(
+    name="abl_vis_w0",
+    notes="Ablation: equal weight on visible and prediction columns.",
+    vis_col_weight=0.0,
+)
+ABL_VIS_W1 = BASE.clone(
+    name="abl_vis_w1",
+    notes="Ablation: full weight on visible columns (1.0).",
+    vis_col_weight=1.0,
+)
+
+# V2-specific loss ablations
+ABL_V2_DZ_LO = V2.clone(
+    name="abl_v2_dz_lo",
+    notes="Ablation: V2 with lower slope head weight (w_dz=0.02).",
+    w_dz=0.02,
+)
+ABL_V2_DZ_HI = V2.clone(
+    name="abl_v2_dz_hi",
+    notes="Ablation: V2 with higher slope head weight (w_dz=0.15).",
+    w_dz=0.15,
+)
+ABL_V2_NO_INTEG = V2.clone(
+    name="abl_v2_no_integ",
+    notes="Ablation: V2 without integrated-path supervision.",
+    w_dz_integ=0.0,
+)
+
+# V3-specific loss ablations
+ABL_V3_MOVE_LO = V3.clone(
+    name="abl_v3_move_lo",
+    notes="Ablation: V3 with lower move head weight (w_move=0.10).",
+    w_move=0.10,
+)
+ABL_V3_MOVE_HI = V3.clone(
+    name="abl_v3_move_hi",
+    notes="Ablation: V3 with higher move head weight (w_move=0.50).",
+    w_move=0.50,
+)
+
+# -- Group 4: Canvas resolution ablations ------------------------------ #
+ABL_COARSE_TVT = BASE.clone(
+    name="abl_coarse_tvt",
+    notes="Ablation: coarser TVT axis (200 rows at 1.0 ft = same +/-100 ft window).",
+    n_rows=200, row_ft=1.0,
+)
+ABL_NARROW_WIN = BASE.clone(
+    name="abl_narrow_win",
+    notes="Ablation: narrower TVT window (+/-50 ft instead of +/-100 ft).",
+    n_rows=200, row_ft=0.5,
+)
+ABL_COARSE_MD = BASE.clone(
+    name="abl_coarse_md",
+    notes="Ablation: coarser MD axis (64 ft stride, half the columns).",
+    md_stride=64.0, n_tgt_cols=160,
+)
+ABL_FINE_MD = BASE.clone(
+    name="abl_fine_md",
+    notes="Ablation: finer MD axis (16 ft stride, matches 2nd place r16). Needs batch_size=2.",
+    md_stride=16.0, n_tgt_cols=640, batch_size=2, accum_steps=2,
+)
+ABL_SHORT_VIS = BASE.clone(
+    name="abl_short_vis",
+    notes="Ablation: shorter visible region (16 cols = 512 ft).",
+    n_vis_cols=16,
+)
+ABL_LONG_VIS = BASE.clone(
+    name="abl_long_vis",
+    notes="Ablation: longer visible region (64 cols = 2048 ft).",
+    n_vis_cols=64,
+)
+
+# -- Group 5: Backbone / architecture ablations ------------------------ #
+ABL_NO_PT = BASE.clone(
+    name="abl_no_pretrain",
+    notes="Ablation: random init (no ImageNet pretraining).",
+    pretrained=False,
+)
+ABL_CNX_TINY = BASE.clone(
+    name="abl_cnx_tiny",
+    notes="Ablation: ConvNeXt-Tiny backbone (smaller model).",
+    backbone="convnext_tiny.in12k_ft_in1k_384",
+)
+ABL_CNX_BASE = BASE.clone(
+    name="abl_cnx_base",
+    notes="Ablation: ConvNeXt-Base backbone (larger model). May need batch_size=2.",
+    backbone="convnext_base.clip_laion2b_augreg_ft_in12k_in1k_384",
+    batch_size=2, accum_steps=2,
+)
+ABL_EFFNET = BASE.clone(
+    name="abl_effnetv2s",
+    notes="Ablation: EfficientNetV2-S backbone (different architecture family).",
+    backbone="tf_efficientnetv2_s.in21k_ft_in1k",
+)
+ABL_GRAD_CK = BASE.clone(
+    name="abl_grad_ckpt",
+    notes="Ablation: gradient checkpointing (trade compute for VRAM).",
+    grad_checkpoint=True,
+)
+
+# -- Group 7: Training recipe ablations -------------------------------- #
+ABL_LR_LO = BASE.clone(
+    name="abl_lr_1e4",
+    notes="Ablation: lower learning rate (1e-4).",
+    lr=1e-4,
+)
+ABL_LR_HI = BASE.clone(
+    name="abl_lr_1e3",
+    notes="Ablation: higher learning rate (1e-3).",
+    lr=1e-3,
+)
+ABL_NO_EMA = BASE.clone(
+    name="abl_no_ema",
+    notes="Ablation: no exponential moving average of weights.",
+    ema_decay=0.0,
+)
+ABL_EMA_HI = BASE.clone(
+    name="abl_ema_hi",
+    notes="Ablation: slower EMA decay (0.9999).",
+    ema_decay=0.9999,
+)
+ABL_NO_WD = BASE.clone(
+    name="abl_no_wd",
+    notes="Ablation: no weight decay.",
+    weight_decay=0.0,
+)
+ABL_HI_WD = BASE.clone(
+    name="abl_hi_wd",
+    notes="Ablation: higher weight decay (0.05).",
+    weight_decay=0.05,
+)
+ABL_NO_WARMUP = BASE.clone(
+    name="abl_no_warmup",
+    notes="Ablation: no learning rate warmup.",
+    warmup_frac=0.0,
+)
+ABL_LONG_WARMUP = BASE.clone(
+    name="abl_long_warmup",
+    notes="Ablation: longer warmup (20% of training).",
+    warmup_frac=0.2,
+)
+ABL_CLIP_LO = BASE.clone(
+    name="abl_clip_lo",
+    notes="Ablation: tighter gradient clipping (0.5).",
+    grad_clip=0.5,
+)
+ABL_CLIP_HI = BASE.clone(
+    name="abl_clip_hi",
+    notes="Ablation: looser gradient clipping (5.0).",
+    grad_clip=5.0,
+)
+ABL_NO_CLIP = BASE.clone(
+    name="abl_no_clip",
+    notes="Ablation: no gradient clipping.",
+    grad_clip=0.0,
+)
+ABL_EP60 = BASE.clone(
+    name="abl_ep60",
+    notes="Ablation: longer training (60 epochs).",
+    epochs=60,
+)
+ABL_EP100 = BASE.clone(
+    name="abl_ep100",
+    notes="Ablation: much longer training (100 epochs).",
+    epochs=100,
+)
+ABL_BS2 = BASE.clone(
+    name="abl_bs2",
+    notes="Ablation: smaller batch size (2) with 2x accumulation.",
+    batch_size=2, accum_steps=2,
+)
+ABL_BS8 = BASE.clone(
+    name="abl_bs8",
+    notes="Ablation: larger batch size (8).",
+    batch_size=8,
+)
+
+# -- Register all named ablation configs ------------------------------- #
+for _c in (
+    ABL_NO_PF, ABL_NO_XY, ABL_CORE, ABL_NO_PF_CORRUPT, ABL_TW_CORRECT_ONLY,
+    ABL_V4_NO_SIB,
+    ABL_NO_AUG, ABL_HI_AUG,
+    ABL_NO_HUBER, ABL_NO_GR, ABL_HI_HUBER, ABL_HI_GR,
+    ABL_TAU1, ABL_TAU4, ABL_TAU8, ABL_HARD_CE,
+    ABL_VIS_W0, ABL_VIS_W1,
+    ABL_V2_DZ_LO, ABL_V2_DZ_HI, ABL_V2_NO_INTEG,
+    ABL_V3_MOVE_LO, ABL_V3_MOVE_HI,
+    ABL_COARSE_TVT, ABL_NARROW_WIN, ABL_COARSE_MD, ABL_FINE_MD,
+    ABL_SHORT_VIS, ABL_LONG_VIS,
+    ABL_NO_PT, ABL_CNX_TINY, ABL_CNX_BASE, ABL_EFFNET, ABL_GRAD_CK,
+    ABL_LR_LO, ABL_LR_HI, ABL_NO_EMA, ABL_EMA_HI,
+    ABL_NO_WD, ABL_HI_WD, ABL_NO_WARMUP, ABL_LONG_WARMUP,
+    ABL_CLIP_LO, ABL_CLIP_HI, ABL_NO_CLIP,
+    ABL_EP60, ABL_EP100, ABL_BS2, ABL_BS8,
+):
+    REGISTRY[_c.name] = _c
+
+
 def get_config(name: str) -> Config:
     if name not in REGISTRY:
         raise KeyError(f"unknown variant {name!r}; have {sorted(REGISTRY)}")
