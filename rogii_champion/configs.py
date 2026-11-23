@@ -258,6 +258,12 @@ ABL_V4_NO_SIB = V4.clone(
     use_sibling=False,
 )
 
+V1_NO_REANCHOR = V1.clone(
+    name="v1_no_reanchor",
+    notes="Ablation: V1 decode with quarter-point re-anchoring disabled (reanchor=0.0).",
+    reanchor=0.0,
+)
+
 # -- Group 2: Augmentation ablations (drop-one) ------------------------ #
 _AUG_NOTES = {
     "p_synth":           "Ablation: no synthetic well generation (1st place's #1 aug).",
@@ -523,6 +529,7 @@ ABL_BS8 = BASE.clone(
 
 # -- Register all named ablation configs ------------------------------- #
 for _c in (
+    V1_NO_REANCHOR,
     ABL_NO_PF, ABL_NO_XY, ABL_CORE, ABL_NO_PF_CORRUPT, ABL_TW_CORRECT_ONLY,
     ABL_V4_NO_SIB,
     ABL_NO_AUG, ABL_HI_AUG,
@@ -540,6 +547,11 @@ for _c in (
     ABL_EP60, ABL_EP100, ABL_BS2, ABL_BS8,
 ):
     REGISTRY[_c.name] = _c
+
+# Aliases for naming flexibility
+REGISTRY["abl_lr_lo"] = ABL_LR_LO
+REGISTRY["abl_lr_hi"] = ABL_LR_HI
+
 
 
 def get_config(name: str) -> Config:
