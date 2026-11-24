@@ -1,0 +1,35 @@
+== unpicked scores (picked / last / late avg) ==
+run                                  picked           last  late avg     sd  flattery
+0801_V2_ep150                 5.0212 @ 110  5.0907 @ 150    5.1628  0.118     0.142
+0801_V2_ep150_local           5.0028 @ 145  5.0167 @ 150    5.0620  0.067     0.059
+x_deepsup_ep150               4.7773 @ 130  4.7826 @ 150    4.8711  0.087     0.094
+x_deepsup_s11_ep150           4.7496 @ 105  4.8980 @ 150    4.8357  0.048     0.086
+x_slope_ep150                 4.8364 @ 150  4.8364 @ 150    4.9141  0.079     0.078
+x_slope_deepsup_ep150         4.9847 @  95  5.2025 @ 150    5.1785  0.057     0.194
+x_slope_s11_ep150             4.6982 @ 125  4.7523 @ 150    4.7831  0.062     0.085
+== x_slope_s11 vs 0801_V2_ep150
+  fdfd57da  gap=-6.244e+05  base_rmse=12.508  treat_rmse=6.098
+  d1457cc5  gap=-6.144e+05  base_rmse=11.655  treat_rmse=6.860
+  f2d4c8c9  gap=-5.264e+05  base_rmse=12.367  treat_rmse=8.290
+  fb03ae90  gap=+2.94e+05  base_rmse=6.174  treat_rmse=9.156
+  febb4411  gap=-2.163e+05  base_rmse=9.421  treat_rmse=6.150
+  e7818f7a  gap=+1.855e+05  base_rmse=3.586  treat_rmse=6.884
+  dc7f9757  gap=-1.812e+05  base_rmse=6.839  treat_rmse=2.283
+  ebe69318  gap=+1.71e+05  base_rmse=2.751  treat_rmse=6.475
+  d9eca87b  gap=+1.68e+05  base_rmse=1.388  treat_rmse=5.318
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_s11_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_s11_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_slope_s11 vs 0801_V2_ep150_local
+  f5859199  gap=-6.713e+05  base_rmse=12.405  treat_rmse=6.161
+  d1ecf309  gap=-3.689e+05  base_rmse=8.203  treat_rmse=2.733
+  d543916f  gap=+3.266e+05  base_rmse=6.737  treat_rmse=10.651
+  fc03f21f  gap=-2.266e+05  base_rmse=10.624  treat_rmse=8.105
+  e03b45fd  gap=+1.994e+05  base_rmse=2.962  treat_rmse=6.790
+  e4726608  gap=-1.934e+05  base_rmse=10.016  treat_rmse=7.711
+  dbee6c86  gap=-1.839e+05  base_rmse=6.571  treat_rmse=4.269
+  e7818f7a  gap=+1.827e+05  base_rmse=3.657  treat_rmse=6.884
+  d1457cc5  gap=-1.808e+05  base_rmse=8.555  treat_rmse=6.860
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_s11_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_s11_ep150\robust_compare__vs_0801_V2_ep150_local.json

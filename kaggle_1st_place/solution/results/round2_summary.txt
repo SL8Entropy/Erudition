@@ -1,0 +1,139 @@
+== unpicked scores (picked / last / late avg) ==
+run                                  picked           last  late avg     sd  flattery
+0801_V2_ep150                 5.0212 @ 110  5.0907 @ 150    5.1628  0.118     0.142
+0801_V2_ep150_local           5.0028 @ 145  5.0167 @ 150    5.0620  0.067     0.059
+x_decoy_ep150                 4.8353 @ 100  5.0022 @ 150    4.9916  0.074     0.156
+x_slope_ep150                 4.8364 @ 150  4.8364 @ 150    4.9141  0.079     0.078
+x_crps_ep150                  4.9789 @ 105  5.0180 @ 150    5.0426  0.055     0.064
+x_deepsup_ep150               4.7773 @ 130  4.7826 @ 150    4.8711  0.087     0.094
+x_ft_real_ep150               4.9234 @ 105  5.0767 @ 150    5.0583  0.049     0.135
+== x_decoy vs 0801_V2_ep150
+  f2d4c8c9  gap=-8.202e+05  base_rmse=12.367  treat_rmse=4.658
+  fb03ae90  gap=+4.982e+05  base_rmse=6.174  treat_rmse=10.751
+  d7eb0be8  gap=-4.147e+05  base_rmse=13.446  treat_rmse=10.198
+  f5859199  gap=-3.582e+05  base_rmse=13.113  treat_rmse=10.492
+  e7818f7a  gap=+3.423e+05  base_rmse=3.586  treat_rmse=8.752
+  f6d009f4  gap=-2.581e+05  base_rmse=8.756  treat_rmse=6.183
+  febb4411  gap=-2.429e+05  base_rmse=9.421  treat_rmse=5.618
+  d24ff243  gap=+2.39e+05  base_rmse=1.823  treat_rmse=6.760
+  f6bc699b  gap=+1.703e+05  base_rmse=18.261  treat_rmse=19.465
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_decoy_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_decoy_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_decoy vs 0801_V2_ep150_local
+  d1457cc5  gap=-4.518e+05  base_rmse=8.555  treat_rmse=2.812
+  e7818f7a  gap=+3.396e+05  base_rmse=3.657  treat_rmse=8.752
+  d1ecf309  gap=-3.021e+05  base_rmse=8.203  treat_rmse=4.278
+  d543916f  gap=+2.906e+05  base_rmse=6.737  treat_rmse=10.293
+  f5859199  gap=-2.537e+05  base_rmse=12.405  treat_rmse=10.492
+  fdfd57da  gap=-2.399e+05  base_rmse=13.924  treat_rmse=12.168
+  f5d8aab6  gap=-1.752e+05  base_rmse=8.121  treat_rmse=5.150
+  fc03f21f  gap=-1.712e+05  base_rmse=10.624  treat_rmse=8.788
+  f6d009f4  gap=-1.635e+05  base_rmse=7.910  treat_rmse=6.183
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_decoy_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_decoy_ep150\robust_compare__vs_0801_V2_ep150_local.json
+== x_slope vs 0801_V2_ep150
+  f5859199  gap=-4.989e+05  base_rmse=13.113  treat_rmse=9.261
+  eac10e86  gap=+2.104e+05  base_rmse=4.476  treat_rmse=7.397
+  f6d009f4  gap=-1.928e+05  base_rmse=8.756  treat_rmse=6.925
+  febb4411  gap=-1.893e+05  base_rmse=9.421  treat_rmse=6.647
+  d7eb0be8  gap=+1.866e+05  base_rmse=13.446  treat_rmse=14.674
+  dc7f9757  gap=-1.653e+05  base_rmse=6.839  treat_rmse=2.979
+  f6bc699b  gap=+1.611e+05  base_rmse=18.261  treat_rmse=19.402
+  d9ae59b2  gap=+1.596e+05  base_rmse=6.873  treat_rmse=9.538
+  fdfd57da  gap=-1.577e+05  base_rmse=12.508  treat_rmse=11.240
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_slope vs 0801_V2_ep150_local
+  f5859199  gap=-3.945e+05  base_rmse=12.405  treat_rmse=9.261
+  fb03ae90  gap=-3.931e+05  base_rmse=10.261  treat_rmse=6.645
+  fdfd57da  gap=-3.536e+05  base_rmse=13.924  treat_rmse=11.240
+  eac10e86  gap=+2.214e+05  base_rmse=4.269  treat_rmse=7.397
+  e4726608  gap=-2.046e+05  base_rmse=10.016  treat_rmse=7.556
+  eb934281  gap=-1.906e+05  base_rmse=7.563  treat_rmse=5.028
+  d1457cc5  gap=-1.835e+05  base_rmse=8.555  treat_rmse=6.832
+  d1ecf309  gap=-1.6e+05  base_rmse=8.203  treat_rmse=6.430
+  d7eb0be8  gap=+1.463e+05  base_rmse=13.720  treat_rmse=14.674
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_slope_ep150\robust_compare__vs_0801_V2_ep150_local.json
+== x_crps vs 0801_V2_ep150
+  d7eb0be8  gap=+4.578e+05  base_rmse=13.446  treat_rmse=16.295
+  fc03f21f  gap=+2.978e+05  base_rmse=8.712  treat_rmse=11.742
+  f6d009f4  gap=-2.053e+05  base_rmse=8.756  treat_rmse=6.789
+  d9ae59b2  gap=+2.05e+05  base_rmse=6.873  treat_rmse=10.170
+  efde6ac3  gap=-1.497e+05  base_rmse=7.100  treat_rmse=4.191
+  dc7f9757  gap=-1.443e+05  base_rmse=6.839  treat_rmse=3.700
+  dc7da28f  gap=+1.398e+05  base_rmse=5.480  treat_rmse=7.702
+  f6bc699b  gap=+1.27e+05  base_rmse=18.261  treat_rmse=19.165
+  d1457cc5  gap=-1.261e+05  base_rmse=11.655  treat_rmse=10.845
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_crps_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_crps_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_crps vs 0801_V2_ep150_local
+  fb03ae90  gap=-3.979e+05  base_rmse=10.261  treat_rmse=6.589
+  d1457cc5  gap=+3.074e+05  base_rmse=8.555  treat_rmse=10.845
+  d1ecf309  gap=-2.047e+05  base_rmse=8.203  treat_rmse=5.839
+  fdfd57da  gap=-1.807e+05  base_rmse=13.924  treat_rmse=12.624
+  f2d4c8c9  gap=-1.694e+05  base_rmse=6.537  treat_rmse=3.953
+  f5d8aab6  gap=-1.582e+05  base_rmse=8.121  treat_rmse=5.509
+  d6c320d9  gap=+1.501e+05  base_rmse=3.405  treat_rmse=6.255
+  d9ae59b2  gap=+1.377e+05  base_rmse=8.104  treat_rmse=10.170
+  eb934281  gap=-1.322e+05  base_rmse=7.563  treat_rmse=5.921
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_crps_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_crps_ep150\robust_compare__vs_0801_V2_ep150_local.json
+== x_deepsup vs 0801_V2_ep150
+  d24ff243  gap=+4.313e+05  base_rmse=1.823  treat_rmse=8.932
+  f2d4c8c9  gap=-4.229e+05  base_rmse=12.367  treat_rmse=9.234
+  f5859199  gap=-4.128e+05  base_rmse=13.113  treat_rmse=10.032
+  fdfd57da  gap=-3.819e+05  base_rmse=12.508  treat_rmse=9.138
+  dc7f9757  gap=-1.739e+05  base_rmse=6.839  treat_rmse=2.624
+  d543916f  gap=-1.653e+05  base_rmse=9.219  treat_rmse=7.109
+  fb03ae90  gap=+1.575e+05  base_rmse=6.174  treat_rmse=7.913
+  f6d009f4  gap=-1.431e+05  base_rmse=8.756  treat_rmse=7.440
+  d6c320d9  gap=-1.417e+05  base_rmse=5.787  treat_rmse=2.738
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_deepsup_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_deepsup_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_deepsup vs 0801_V2_ep150_local
+  d1457cc5  gap=-4.302e+05  base_rmse=8.555  treat_rmse=3.320
+  d1ecf309  gap=-3.682e+05  base_rmse=8.203  treat_rmse=2.755
+  d24ff243  gap=+3.293e+05  base_rmse=4.626  treat_rmse=8.932
+  f5859199  gap=-3.083e+05  base_rmse=12.405  treat_rmse=10.032
+  fb03ae90  gap=-2.744e+05  base_rmse=10.261  treat_rmse=7.913
+  f6bc699b  gap=-2.692e+05  base_rmse=19.347  treat_rmse=17.394
+  f2d4c8c9  gap=+2.658e+05  base_rmse=6.537  treat_rmse=9.234
+  fc03f21f  gap=-1.917e+05  base_rmse=10.624  treat_rmse=8.541
+  e03b45fd  gap=+1.771e+05  base_rmse=2.962  treat_rmse=6.475
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_deepsup_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_deepsup_ep150\robust_compare__vs_0801_V2_ep150_local.json
+== x_ft_real vs 0801_V2_ep150
+  f5859199  gap=-3.919e+05  base_rmse=13.113  treat_rmse=10.211
+  d7eb0be8  gap=+3.605e+05  base_rmse=13.446  treat_rmse=15.733
+  fb03ae90  gap=+3.145e+05  base_rmse=6.174  treat_rmse=9.328
+  f6d009f4  gap=-3.144e+05  base_rmse=8.756  treat_rmse=5.463
+  d543916f  gap=-2.492e+05  base_rmse=9.219  treat_rmse=5.750
+  d1457cc5  gap=-2.463e+05  base_rmse=11.655  treat_rmse=10.012
+  febb4411  gap=-2.103e+05  base_rmse=9.421  treat_rmse=6.263
+  e32da4ec  gap=+2.089e+05  base_rmse=4.747  treat_rmse=8.190
+  dc7f9757  gap=-1.646e+05  base_rmse=6.839  treat_rmse=3.002
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_ft_real_ep150\robust_compare_curve__vs_0801_V2_ep150.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_ft_real_ep150\robust_compare__vs_0801_V2_ep150.json
+== x_ft_real vs 0801_V2_ep150_local
+  f5859199  gap=-2.874e+05  base_rmse=12.405  treat_rmse=10.211
+  eb934281  gap=-2.27e+05  base_rmse=7.563  treat_rmse=4.380
+  f6d009f4  gap=-2.198e+05  base_rmse=7.910  treat_rmse=5.463
+  d1ecf309  gap=-1.894e+05  base_rmse=8.203  treat_rmse=6.048
+  d1457cc5  gap=+1.872e+05  base_rmse=8.555  treat_rmse=10.012
+  e5864244  gap=+1.249e+05  base_rmse=5.138  treat_rmse=7.372
+  f5d8aab6  gap=-1.176e+05  base_rmse=8.121  treat_rmse=6.285
+  fb03ae90  gap=-1.175e+05  base_rmse=10.261  treat_rmse=9.328
+  fdfd57da  gap=-1.113e+05  base_rmse=13.924  treat_rmse=13.138
+
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_ft_real_ep150\robust_compare_curve__vs_0801_V2_ep150_local.csv
+wrote C:\Users\Aadinarayan R\Desktop\CSE\projects\Erudition\kaggle_1st_place\solution\results\x_ft_real_ep150\robust_compare__vs_0801_V2_ep150_local.json

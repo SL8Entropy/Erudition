@@ -628,6 +628,7 @@ class CFG:
         "GR_penalty": 0.05/3,
         "dS_penalty": 0.0,
         "unet_GR_RMSE": 0.0,
+        "slope": 0.0,  # supervised multiscale slope loss over cfg.slope_windows (seq_NN_train)
     }
     dS_windows = (1, 7, 15, 31)
     dS_weights = tuple([0.25]*4)
@@ -3219,7 +3220,71 @@ def make_bilzard_cfgs():
         c.refresh()
         return c
 
+    # --- Training-side round (2026-10-08): one change each against plain 0801_V2, run at
+    # 150 epochs and compared with the two existing control seeds (0801_V2_ep150 and
+    # 0801_V2_ep150_local).  Targets from the posterior analysis: ~51% of squared error is
+    # wrong/blended repeated band, ~25% a drifting single hump.
+    # x_decoy: decoy GR segments (typewell read one repeat period off the true path, labels
+    # unchanged) in 25% of z_shift samples -- see Simulator._inject_decoys.
+    decoy_cfg = deepcopy(base)
+    decoy_cfg.sim_cfg["z_shift"].update({"decoy_prob": 0.25})
+    decoy_cfg.refresh()
+    # x_slope: supervised multiscale slope loss over 16/64/128 columns at 5x the regression
+    # weight.  Measured on a synthetic 16 ft straight-line drift, windows (4,16,64) at 1x gave a
+    # slope term ~28x smaller than the pointwise regression term -- too weak to test anything;
+    # (16,64,128) at 5x puts the two on the same scale for that drift.
+    slope_cfg = deepcopy(base)
+    slope_cfg.unet_loss_weights = dict(
+        slope_cfg.unet_loss_weights, slope=5.0 * slope_cfg.unet_loss_weights["regression"])
+    slope_cfg.slope_windows = (16, 64, 128)
+    slope_cfg.refresh()
+    # x_crps: the existing ranked-probability (CDF) loss, added alongside -- not replacing --
+    # the alignment cross-entropy (arch_v1_unimodal replaced it, which confounded that test).
+    crps_cfg = deepcopy(base)
+    crps_cfg.unet_loss_weights = dict(
+        crps_cfg.unet_loss_weights, CDF=crps_cfg.unet_loss_weights["alignment"] / 4.0)
+    crps_cfg.refresh()
+    # x_deepsup: the existing deep supervision of decoder stages (stage decay 0.5).
+    deepsup_cfg = deepcopy(base)
+    deepsup_cfg.unet_cfg = dict(deepsup_cfg.unet_cfg, deep_sup=True, deep_sup_stage_decay=0.5)
+    deepsup_cfg.refresh()
+    # x_ft_real: 10 extra epochs on real wells (z_shift off, lr x0.3) after the main schedule.
+    ft_real_cfg = deepcopy(base)
+    ft_real_cfg.finetune_epochs = 10
+    ft_real_cfg.refresh()
+    # Round 3 (2026-10-09): the two round-2 winners combined, plus second seeds of each.
+    # Round 2 (seed 7): x_deepsup last/late 4.783/4.871, x_slope 4.836/4.914 against controls
+    # 5.091/5.163 and 5.017/5.062.  Seed repeats keep everything but cfg.seed.
+    slope_deepsup_cfg = deepcopy(slope_cfg)
+    slope_deepsup_cfg.unet_cfg = dict(slope_deepsup_cfg.unet_cfg, deep_sup=True, deep_sup_stage_decay=0.5)
+    slope_deepsup_cfg.refresh()
+    deepsup_s11_cfg = deepcopy(deepsup_cfg)
+    deepsup_s11_cfg.seed = 11
+    deepsup_s11_cfg.refresh()
+    slope_s11_cfg = deepcopy(slope_cfg)
+    slope_s11_cfg.seed = 11
+    slope_s11_cfg.refresh()
+    # Round 4 (2026-10-10).  A: the combination again, slope term on the final output only
+    # (x_slope_deepsup applied it to the upsampled coarse stages too and scored worse).
+    slope_deepsup_final_cfg = deepcopy(slope_deepsup_cfg)
+    slope_deepsup_final_cfg.slope_final_only = True
+    slope_deepsup_final_cfg.refresh()
+    # B: the FastViT student recipe of cnx_fastvit_kd_small_local with only the teacher swapped
+    # for the best round-3 model (x_slope_s11: last 4.752 / late 4.783).
+    fastvit_kd_xslope_cfg = _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
+                                    teachers=["results/x_slope_s11_ep150"])
+
     return [
+        ("x_decoy", decoy_cfg),
+        ("x_slope", slope_cfg),
+        ("x_crps", crps_cfg),
+        ("x_deepsup", deepsup_cfg),
+        ("x_ft_real", ft_real_cfg),
+        ("x_slope_deepsup", slope_deepsup_cfg),
+        ("x_deepsup_s11", deepsup_s11_cfg),
+        ("x_slope_s11", slope_s11_cfg),
+        ("x_slope_deepsup_final", slope_deepsup_final_cfg),
+        ("cnx_fastvit_kd_xslope", fastvit_kd_xslope_cfg),
         ("rb_v1_neighbor", neighbor_cfg),
         ("rb_v2_synth", synth_cfg),
         ("rb_v3_tta", tta_cfg),
@@ -3259,6 +3324,10 @@ def make_bilzard_cfgs():
         # different mistakes from tiny, and tiny + (student of tiny) already reached 4.766.
         ("cnx_fastvit_kd_small", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
                                          teachers=["results/0801_V2_ep150"])),
+        # The same student taught by a ConvNeXt-small retrained on this machine: models.pkl is
+        # git-ignored, so the seed-7 teacher's weights exist only where it was trained.
+        ("cnx_fastvit_kd_small_local", _kd_ens("hf_hub:timm/fastvit_sa12.apple_dist_in1k",
+                                               teachers=["results/0801_V2_ep150_local"])),
         # Two follow-ups to cnx_fastvit_kd_small, same teacher (ConvNeXt-small), same settings.
         # sa24: twice sa12's depth (20.4M backbone vs 10.4M).  Reparameterised it runs in ~22 ms
         # in the U-Net, the same as sa12 un-reparameterised, so it buys capacity at today's cost.

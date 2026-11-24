@@ -5314,6 +5314,12 @@ class Simulator:
         prefix_sample_len=None,
         safe_range_guard=False,
         safe_range_guard_resample=5,
+        decoy_prob=0.0,
+        decoy_max_segments=2,
+        decoy_len_range=(200, 800),
+        decoy_period_range_ft=(10.0, 40.0),
+        decoy_fallback_ft=15.0,
+        decoy_blend_rows=16,
     ):
         '''
         x,y stay the same, shift tvt while hold (tvt+z) unchanged
@@ -5505,6 +5511,19 @@ class Simulator:
         else:
             raise ValueError(f"unknown z_shift noise_mode: {noise_mode!r}")
         GR_sim=sim_matched_GR+GR_noise
+        # Decoy segments (8th-place idea): over a few suffix stretches the GR is read from the
+        # typewell one repeat period above or below the true path, labels unchanged.  Without
+        # this the clean simulated GR always matches the true band best, so the network never
+        # sees the repeated-layer ambiguity that dominates real-well error.  The probability
+        # check comes first so decoy_prob=0 draws no random numbers (bit-identical baseline).
+        decoy_prob = float(decoy_prob)
+        if decoy_prob > 0.0 and random.random() < decoy_prob:
+            GR_sim = self._inject_decoys(
+                well_data, GR_sim, GR_noise, TVT_sim, suffix_cond, v_TVT, v_GR,
+                max_segments=decoy_max_segments, len_range=decoy_len_range,
+                period_range_ft=decoy_period_range_ft, fallback_ft=decoy_fallback_ft,
+                blend_rows=decoy_blend_rows,
+            )
         if nan_mode=='same':
             GR_sim[np.isnan(GR)]=np.nan
         elif nan_mode=='shift':
@@ -5545,6 +5564,57 @@ class Simulator:
         well_data['horizontal']['TVT_input']=TVT_input_sim
         well_data['horizontal']['GR']=GR_sim
         return well_data
+
+    def _decoy_period(self, well_id, v_TVT, v_GR, period_range_ft, fallback_ft):
+        """Typewell repeat period: the lag in ``period_range_ft`` with the strongest GR
+        autocorrelation (on a 0.5 ft grid), or ``fallback_ft`` when no lag reaches 0.2.
+        Cached per well; the typewell is fixed per well before z_shift runs."""
+        cache = self.__dict__.setdefault("_decoy_period_cache", {})
+        if well_id in cache:
+            return cache[well_id]
+        period = float(fallback_ft)
+        tvt = np.asarray(v_TVT, dtype=np.float64)
+        gr = np.asarray(v_GR, dtype=np.float64)
+        ok = np.isfinite(tvt) & np.isfinite(gr)
+        if ok.sum() > 64:
+            grid = np.arange(tvt[ok].min(), tvt[ok].max(), 0.5)
+            g = np.interp(grid, tvt[ok], gr[ok])
+            g = g - g.mean()
+            var = float((g * g).mean())
+            lo, hi = (int(round(v / 0.5)) for v in period_range_ft)
+            if var > 0.0 and len(g) > hi + 16:
+                lags = np.arange(lo, hi + 1)
+                ac = np.array([(g[:-k] * g[k:]).mean() / var for k in lags])
+                if ac.max() >= 0.2:
+                    period = float(lags[int(np.argmax(ac))]) * 0.5
+        cache[well_id] = period
+        return period
+
+    def _inject_decoys(self, well_data, GR_sim, GR_noise, TVT_sim, suffix_cond, v_TVT, v_GR,
+                       max_segments, len_range, period_range_ft, fallback_ft, blend_rows):
+        suffix_idx = np.flatnonzero(suffix_cond)
+        lo_len, hi_len = (int(v) for v in len_range)
+        if len(suffix_idx) < lo_len:
+            return GR_sim
+        period = self._decoy_period(well_data['well_id'], v_TVT, v_GR, period_range_ft, fallback_ft)
+        GR_out = GR_sim.copy()
+        for _ in range(np.random.randint(1, int(max_segments) + 1)):
+            seg_len = np.random.randint(lo_len, min(hi_len, len(suffix_idx)) + 1)
+            start = suffix_idx[0] + np.random.randint(0, len(suffix_idx) - seg_len + 1)
+            rows = np.arange(start, start + seg_len)
+            sign = 1.0 if random.random() < 0.5 else -1.0
+            decoy = np.interp(TVT_sim[rows] + sign * period, v_TVT, v_GR, left=np.nan, right=np.nan)
+            decoy = decoy + GR_noise[rows]
+            ramp = np.ones(seg_len)
+            b = min(int(blend_rows), seg_len // 2)
+            if b > 0:
+                edge = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, b))
+                ramp[:b] = edge
+                ramp[-b:] = edge[::-1]
+            usable = np.isfinite(decoy)
+            mixed = (1.0 - ramp) * GR_out[rows] + ramp * decoy
+            GR_out[rows] = np.where(usable, mixed, GR_out[rows])
+        return GR_out
 
     def xy_shift(self,well_data,shift_bound=5):
         '''
@@ -6328,6 +6398,12 @@ class Simulator:
                 fault_std=self.sim_cfg['z_shift'].get('fault_std',0.0),
                 safe_range_guard=self.sim_cfg['z_shift'].get('safe_range_guard',False),
                 safe_range_guard_resample=self.sim_cfg['z_shift'].get('safe_range_guard_resample',5),
+                decoy_prob=self.sim_cfg['z_shift'].get('decoy_prob',0.0),
+                decoy_max_segments=self.sim_cfg['z_shift'].get('decoy_max_segments',2),
+                decoy_len_range=self.sim_cfg['z_shift'].get('decoy_len_range',(200,800)),
+                decoy_period_range_ft=self.sim_cfg['z_shift'].get('decoy_period_range_ft',(10.0,40.0)),
+                decoy_fallback_ft=self.sim_cfg['z_shift'].get('decoy_fallback_ft',15.0),
+                decoy_blend_rows=self.sim_cfg['z_shift'].get('decoy_blend_rows',16),
             )
         if random.random()<self.sim_cfg['xy_shift']['apply_prob']:
             well_data=self.xy_shift(

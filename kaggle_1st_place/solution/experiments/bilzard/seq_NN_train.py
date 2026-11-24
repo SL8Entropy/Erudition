@@ -810,6 +810,7 @@ def unet_loss_weights(cfg):
         "GR_penalty",
         "dS_penalty",
         "unet_GR_RMSE",
+        "slope",
     )
     raw_weights = getattr(cfg, "unet_loss_weights", {})
     unknown_keys = set(raw_weights) - set(expected_keys)
@@ -1233,6 +1234,31 @@ def masked_gr_penalty_loss(logits, gr_error, target_mask, loss_weight=None, loss
     return _weighted_masked_mean(per_bin_loss, target_mask, loss_weight, loss_scale_weight)
 
 
+def masked_multiscale_slope_huber_loss(pred, target, target_mask, cfg, loss_weight=None, loss_scale_weight=None):
+    """Supervised slope loss: Huber on (pred[t+w] - pred[t]) - (target[t+w] - target[t]) over
+    ``cfg.slope_windows`` MD columns, averaged over windows.  Z is known, so the TVT slope error
+    equals the error in the slope of the surface TVT + Z; this targets the one-straight-line
+    drift that the pointwise regression term only sees indirectly.  Exactly 0 when pred == target.
+    """
+    windows = tuple(int(w) for w in getattr(cfg, "slope_windows", (4, 16, 64)))
+    total, used = None, 0
+    for w in windows:
+        if w <= 0 or pred.shape[1] <= w:
+            continue
+        diff = (pred[:, w:] - pred[:, :-w]) - (target[:, w:] - target[:, :-w])
+        mask = target_mask[:, w:] & target_mask[:, :-w]
+        lw = None if loss_weight is None else loss_weight[:, w:]
+        sw = None if loss_scale_weight is None else loss_scale_weight[:, w:]
+        term = masked_regression_loss_values(
+            diff, torch.zeros_like(diff), mask, "huber", cfg, loss_weight=lw, loss_scale_weight=sw,
+        )
+        total = term if total is None else total + term
+        used += 1
+    if total is None:
+        return pred.float().sum() * 0.0
+    return total / used
+
+
 def masked_surface_curvature_l1_loss(pred, z_rel, target_mask, cfg, loss_weight=None, loss_scale_weight=None):
     if z_rel is None:
         raise ValueError("dS_penalty requires z_rel")
@@ -1310,11 +1336,16 @@ def _unet_loss_single(
     bin_count=None,
     z_rel=None,
     loss_scale_weight=None,
+    is_deep_sup_stage=False,
 ):
     del bin_count
     if extra is None:
         raise ValueError("unet requires model extra_return=True")
     weights = unet_loss_weights(cfg)
+    if is_deep_sup_stage and bool(getattr(cfg, "slope_final_only", False)):
+        # Coarse decoder stages are upsampled to the full grid before scoring; a slope term on
+        # them pulls against the main output (x_slope_deepsup scored worse than either alone).
+        weights = dict(weights, slope=0.0)
     if (
         weights["alignment"] != 0.0
         or weights["CDF"] != 0.0
@@ -1336,6 +1367,7 @@ def _unet_loss_single(
         or weights["GR_penalty"] != 0.0
         or weights["dS_penalty"] != 0.0
         or weights["unet_GR_RMSE"] != 0.0
+        or weights["slope"] != 0.0
     ):
         sequence_weight = model_sequence_loss_weight(
             pred,
@@ -1360,6 +1392,20 @@ def _unet_loss_single(
         loss = weighted if loss is None else loss + weighted
         if return_details:
             details["regression"] = regression_loss
+
+    if weights["slope"] != 0.0:
+        slope_loss = masked_multiscale_slope_huber_loss(
+            pred,
+            target,
+            target_mask,
+            cfg,
+            loss_weight=sequence_weight,
+            loss_scale_weight=loss_scale_weight,
+        )
+        weighted = weights["slope"] * slope_loss
+        loss = weighted if loss is None else loss + weighted
+        if return_details:
+            details["slope"] = slope_loss
 
     if weights["offset"] != 0.0:
         active_model_cfg = getattr(cfg, "model_cfg", None)
@@ -1614,6 +1660,7 @@ def unet_loss(
             bin_count=bin_count,
             z_rel=z_rel,
             loss_scale_weight=loss_scale_weight,
+            is_deep_sup_stage=True,
         )
         loss = loss + stage_weight * stage_loss
         for name, value in stage_details.items():

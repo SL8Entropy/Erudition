@@ -792,7 +792,8 @@ Weights `mobileone_s1.apple_in1k` (19.6 MB) are **not yet downloaded**.
 `unet_emb_dim=32`, `unet_mults=(1,2,4,4)`, `unet_stacks=1` against an encoder that ends at 768
 channels, and `to_backbone` is already a 1x1 projection. Timed inside the U-Net (tiny, 345x400,
 fp16, batch 1; total 22.2 ms): backbone_stages 11.2, up_blocks ~5, full_up_block 2.2, out 1.5,
-stem 1.8, stem_down + to_backbone 0.16. The decoder parts hold ~0.05M parameters -- their cost
+stem 1.8, stem_down + to_backbone 0.16. The full-resolution decoder parts hold ~0.05M parameters
+(correction 2026-10: the three mid up-blocks hold ~4.07M, ~10 GMAC) -- their cost
 is the resolution they run at, not their width, so pruning width further saves ~nothing while
 cutting resolution is what the 2:1 rule says costs accuracy.
 
@@ -914,7 +915,7 @@ share the (345, 400) alignment grid.
 ### Correction: "pseudo-label synthetic wells" is already happening (2026-09-21)
 
 `seq_NN_dataset.py:6301` replaces each training sample with a `z_shift` simulation with
-probability `sim_cfg['z_shift']['apply_prob']` (0.85), and a simulated well carries its exact
+probability `sim_cfg['z_shift']['apply_prob']` (0.85: the class default is 0.75, but the 0801_V2 recipe overrides it in `make_seq_requested_ablation_cfgs`), and a simulated well carries its exact
 generated path as the label. So synthetic wells never needed pseudo-labels, and the distillation
 term in `seq_NN_train.py` already runs the teacher on every training batch -- 85% of which are
 synthetic. The Fast-FoundationStereo lesson (1.4M pseudo-labelled pairs) applies to large pools of
@@ -1226,3 +1227,25 @@ one consolidated file per split would cut it further.
   - `cnx_fastvit_kd_small` vs `cnx_tiny`: k*=8, 62.5%, REJECT.
 - Flattery (picked minus late avg), per run: small 0.142, tiny 0.147, rb_v2_synth 0.149,
   fastvit 0.067, fastvit_kd 0.151, fastvit_kd_small 0.096. It is not a uniform 0.14-0.15.
+
+## Training round on the RTX 5060 (28 Sep – 10 Oct 2026)
+
+Full log with every number, command and code change: **`kaggle_1st_place/EXPERIMENTS_2026-10.md`**.
+Probe and chain scripts: `solution/analysis/` (see its README). Literature review:
+`wellbore-ml-gaps/report.md`.
+
+- **Two changes each cut honest error ~0.26 ft, replicated on two seeds** (late-average, controls
+  5.112): slope loss `x_slope` / `x_slope_s11` (4.914 / 4.783) and deep supervision `x_deepsup` /
+  `x_deepsup_s11` (4.871 / 4.836). Best single run: `x_slope_s11` (reported 4.6692, last 4.752).
+- **Do not combine them**: `x_slope_deepsup` 5.178, `x_slope_deepsup_final` 5.128 late-average.
+- **FastViT taught by `x_slope_s11`** (`cnx_fastvit_kd_xslope`) ties the plain ConvNeXt-small at half
+  the network time (4.9762 vs 4.9746 reported).
+- **The 4.84 FastViT student did not reproduce**: retrained (`cnx_fastvit_kd_small_local`) it scored
+  5.18 reported / 5.31 late-average. The ConvNeXt-small teacher did reproduce (4.9746).
+- Not supported: decoy injection (`x_decoy`), CDF loss (`x_crps`), real-only finetune (`x_ft_real`,
+  overfits), sibling GR references, second-order continuity decode, temperature/calibration.
+- New code (`experiments/bilzard`): `slope` loss weight + `slope_windows` + `slope_final_only`
+  (seq_NN_train.py), `sim_cfg['z_shift']['decoy_prob']` (seq_NN_dataset.py). Defaults are
+  bit-identical to the old code.
+- `tw_gr_m0p25` / `tw_gr_p0p25` are ±0.25 ft typewell shifts, not stretch channels.
+- This laptop: `--num-workers 1` (16 GB RAM); disable idle sleep for overnight chains.

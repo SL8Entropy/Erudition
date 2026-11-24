@@ -1,0 +1,138 @@
+# Field definitions for each research item.
+# detail_level: brief -> moderate -> detailed
+# Merged from: confirmed framework, web-search additions, and the columns of
+# "literature review.ods" (Paper, author, Year, extreme summary, 使いどころ/where to use, notes).
+
+fields:
+  basics:
+    - name: name
+      description: Paper / method / solution name (lit-review column "Paper")
+      detail_level: brief
+    - name: authors_org
+      description: Authors or organisation (lit-review column "author")
+      detail_level: brief
+    - name: year
+      description: Publication or release year (lit-review column "Year")
+      detail_level: brief
+    - name: venue_link
+      description: Venue and URL (journal, conference, arXiv, Kaggle writeup, GitHub)
+      detail_level: brief
+    - name: code_availability
+      description: Is code / weights public, and where
+      detail_level: brief
+    - name: evidence_level
+      description: Peer-reviewed, competition writeup, code only, or search-snippet only (unverified)
+      detail_level: brief
+    - name: extreme_summary
+      description: One- or two-sentence summary (lit-review column "extreme summary")
+      detail_level: brief
+
+  problem_formulation:
+    - name: task_definition
+      description: What is predicted and from what
+      detail_level: moderate
+    - name: inputs
+      description: Signals used (GR, trajectory, typewell, neighbour wells, other logs)
+      detail_level: moderate
+    - name: target_parameterisation
+      description: TVT directly, u = TVT + Z, relative geologic time, explicit dip/slope state, etc.
+      detail_level: moderate
+    - name: output_representation
+      description: Point estimate, per-column distribution, K hypotheses, path, field
+      detail_level: moderate
+
+  method:
+    - name: architecture
+      description: Network / algorithm structure
+      detail_level: detailed
+    - name: core_mechanism
+      description: The key idea that makes it work
+      detail_level: detailed
+    - name: training_objective
+      description: Losses, structured losses, constraints in the loss
+      detail_level: moderate
+    - name: decoding
+      description: How the final answer is extracted (mean, median, mode, DP/Viterbi, gate)
+      detail_level: moderate
+    - name: metric_consistent_decode
+      description: Is the decode Bayes-optimal for RMSE (mean), MAE (median), or mode-seeking? Mode-seeking can raise our RMSE.
+      detail_level: brief
+    - name: evidence_scope
+      description: Local window, whole lateral, typewell only, or multiple wells jointly
+      detail_level: brief
+    - name: prefix_conditioning
+      description: Whether and how known heel labels are used (input, fine-tuning, closed-form correction)
+      detail_level: brief
+    - name: propose_vs_select
+      description: Single output vs candidate generation + rerank/gate (can it slot in as an ensemble member?)
+      detail_level: brief
+    - name: physical_constraints
+      description: Imposed structure (layer ordering, smooth dip, TVT+Z-ANCC identity, continuity)
+      detail_level: brief
+
+  data:
+    - name: dataset
+      description: Dataset name, size, region
+      detail_level: brief
+    - name: synthetic_to_real
+      description: Synthetic ratio, normalisation between lateral and typewell, alignment stage
+      detail_level: moderate
+
+  results:
+    - name: metric_and_performance
+      description: Reported metric and numbers
+      detail_level: moderate
+    - name: comparability
+      description: How comparable to our pooled RMSE on 155 holdout wells
+      detail_level: brief
+    - name: validation_protocol
+      description: Fold safety, spatial grouping, reported CV vs leaderboard gap
+      detail_level: brief
+    - name: inference_budget
+      description: CPU/GPU time per well; fits rig / Kaggle budget?
+      detail_level: brief
+
+  ambiguity_handling:
+    - name: repeated_layers
+      description: How it handles repeated / self-similar layers (band confusion)
+      detail_level: moderate
+    - name: drift
+      description: How it handles slow systematic drift (one straight line per well)
+      detail_level: moderate
+    - name: uncertainty_and_calibration
+      description: Uncertainty output, calibration analysis (reliability/ECE, temperature/isotonic)
+      detail_level: moderate
+
+  relevance_to_erudition:
+    - name: where_to_use
+      description: Where it plugs into our pipeline (lit-review column "使いどころ")
+      detail_level: moderate
+    - name: error_mode_targeted
+      description: Band confusion (~51%), drift (~25%), broad hump (~13%), or measurement/protocol
+      detail_level: brief
+    - name: gap_vs_our_implementation
+      description: What we do not do today that this offers; or confirmation we already do it
+      detail_level: detailed
+    - name: proposed_experiment
+      description: Concrete experiment for our repo (files touched, config, control run)
+      detail_level: detailed
+    - name: implementation_effort
+      description: Low / medium / high, with reason
+      detail_level: brief
+    - name: gpu_cost
+      description: Estimated training/inference cost on RTX 5060 laptop (8 GB)
+      detail_level: brief
+    - name: distillation_compatibility
+      description: Works with FastViT student + KD on output posteriors?
+      detail_level: brief
+    - name: error_correlation_with_ours
+      description: Expected diversity vs ConvNeXt/FastViT errors (useful as blend/gate member?)
+      detail_level: brief
+    - name: risk
+      description: Why it might not help here (data-limited regime, prior failures, noise floor)
+      detail_level: moderate
+    - name: notes
+      description: Free notes (lit-review column "notes and schist")
+      detail_level: moderate
+
+uncertain: []   # auto-filled during /research-deep
