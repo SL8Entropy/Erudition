@@ -1,0 +1,15 @@
+{
+  "description": "All paths are relative to this file. Only the 0801_V2 snapshot is kept: it supplies the recipe metadata for --id 0801_V2.",
+  "paths": {
+    "project_root": ".",
+    "data_dir": "data",
+    "train_dir": "data/train",
+    "test_dir": "data/test",
+    "output_dir": "reproduction_outputs",
+    "pf_cache_dir": "PF_cache",
+    "cv_geo_map_path": "data/train_png_typewell_map.csv"
+  },
+  "reference_results": {
+    "0801_V2": "Original_Comp_Models/0801_V2"
+  }
+}

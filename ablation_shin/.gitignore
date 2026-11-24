@@ -1,0 +1,10 @@
+# data: 1.4 GB, copied onto each laptop by hand (see README.md)
+pipeline/data/
+# model weights and large per-run files
+*.pkl
+*.pqt
+*.npz
+__pycache__/
+pipeline/reproduction_outputs/
+pipeline/PF_cache/
+.venv/
