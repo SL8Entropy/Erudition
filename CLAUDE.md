@@ -7,7 +7,7 @@ pipeline, written up as an IEEE TGRS paper. **This file is the entry point. Read
 
 | Path | What it is |
 |---|---|
-| `ablation_shin/` | **Current work:** the paper's ablation study. Read its `README.md`, `PLAN.md`, `COMMANDS.md`; log every run in `RESULTS_LOG.md`. Runs start from `ablation_shin/pipeline/`. |
+| `ablation_study/` | **Current work:** the paper's ablation study. Read its `README.md`, `PLAN.md`, `COMMANDS.md`; log every run in `RESULTS_LOG.md`. Runs start from `ablation_study/pipeline/`. |
 | `kaggle_1st_place/` | The research pipeline the paper is built on. Its own `CLAUDE.md` covers how it works. |
 | `kaggle_1st_place/EXPERIMENTS_2026-10.md` | The training round that produced the slope loss (seeds 7/11). |
 | `kaggle_1st_place/NOTES_ARCHIVE_2026-09.md` | Archive of the September experiments. Out of date: read only for history. |
@@ -33,7 +33,7 @@ Numbers from the October runs (seeds 7/11), late-average RMSE in ft:
 | Teacher, mean of 2 seeds | 4.849 |
 | Student, 1 seed | 5.053 |
 
-Paper Table II still quotes an older student (4.83) that did not reproduce. The paper's tables will be filled from `ablation_shin`, seeds 1 and 2.
+Paper Table II still quotes an older student (4.83) that did not reproduce. The paper's tables will be filled from `ablation_study`, seeds 1 and 2.
 
 ## Rules
 

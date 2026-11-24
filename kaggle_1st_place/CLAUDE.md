@@ -2,7 +2,7 @@
 
 The ROGII Kaggle 1st-place solution, repackaged for local training and scoring. Project-wide rules,
 the paper model and machine notes are in `../CLAUDE.md`. **Paper ablation runs do not happen here:** they use the
-copy in `../ablation_shin/pipeline/`.
+copy in `../ablation_study/pipeline/`.
 
 ## Layout (run every command from `solution/`)
 

@@ -7,7 +7,7 @@ This repository contains the codebase for predicting true vertical thickness (TV
 ## Directory Structure
 
 - `/kaggle_1st_place/`: the 1st-place pipeline, with the archived competition models and reproduction scripts. **The paper is built on this pipeline.**
-- `/ablation_shin/`: the paper's ablation study. Its plan, the commands to run in order, a results log and its own copy of the pipeline.
+- `/ablation_study/`: the paper's ablation study. Its plan, the commands to run in order, a results log and its own copy of the pipeline.
 - `/rogii_champion/`: a separate reimplementation of the 1st-place solution with five variants. Not used in the paper.
 - `/kaggle2ndplace/`: the 2nd-place AnchorCNN code and local training tools (private LB 5.802).
 - `/wellbore-ml-gaps/`: the literature and competition review.
