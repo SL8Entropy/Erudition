@@ -16,8 +16,13 @@ kaggle_1st_place/
     |-- experiments/bilzard/   # the one edited fork; four recipes live in its cfg registry
     |-- seq_NN_main_reproduce.py  # original: 15-fold CV repro -> reproduction_outputs/<ID>/
     |-- seq_NN_holdout_eval.py    # added: 80/20 holdout -> results/<ID>/
-    `-- submit-reproduce.ipynb    # six-family ensemble; loads models.pkl from output dirs
+    |-- experiments/arch/      # second fork: four architecture experiments
+    |-- analysis/              # posterior probes and run_chain.sh (see its README)
+    `-- results/<run>/         # one dir per run; models.pkl is git-ignored
 ```
+
+`fig0`–`fig5*.png` and `make_methodology_figures.py` in `kaggle_1st_place/` are the paper's
+methodology figures. The notebook `submit-reproduce.ipynb` was never committed to this repo.
 
 ## Do not re-explore `Original_Comp_Models/`
 
@@ -37,8 +42,8 @@ already been done. The findings:
   **0801_V2 4.8045 (best)**, 0803_V2 5.0055. Final submission = all six x 15 = 90 models.
 - No `models.pkl` ships with the repo, by design. The only `.pkl`s are `cfg.pkl` configs.
 
-Snapshot module roles are tabulated in `solution/README.md`; read that table instead of
-opening the files.
+`solution/README.md`, which tabulated the snapshot module roles, was deleted on 2026-09-25
+(commit 30c486b). Use the "Where to change what" table below instead.
 
 ## Data schema
 
@@ -305,7 +310,8 @@ several baselines into its own directory without clobbering earlier reports.
    which fetches `config.json` on every model build. Pass `--offline-timm`: it rewrites
    that to the bare `convnext_small.in12k_ft_in1k_384` tag (timm's registry resolves it to
    the same repo, weights already cached) and sets `HF_HUB_OFFLINE=1`. Same weights.
-2. **GPU is an RTX 3050 6 GB laptop.** The archived `batch_size=16` needs ~11 GiB and
+2. **GPU was an RTX 3050 6 GB laptop until 2026-09; runs from 28 Sep on are on an RTX 5060
+   8 GB laptop** (~40 s/epoch, `--num-workers 1`). The archived `batch_size=16` needs ~11 GiB and
    OOMs. Use `--batch-size 4 --val-batch-size 4 --grad-accum-steps 4` to keep the
    effective batch (BatchNorm stats then come from 4, a small deviation).
 
@@ -359,7 +365,7 @@ selects a registry entry the archived recipe map does not know about, and result
 `results/<cfg-name>/` with the edited source copied beside `models.pkl`. `--id` is still
 required: it supplies the recipe metadata, not the code.
 
-Where to change what (module roles are tabulated in `solution/README.md`):
+Where to change what:
 
 | Change | File |
 |---|---|
@@ -1249,3 +1255,17 @@ Probe and chain scripts: `solution/analysis/` (see its README). Literature revie
   bit-identical to the old code.
 - `tw_gr_m0p25` / `tw_gr_p0p25` are ±0.25 ft typewell shifts, not stretch channels.
 - This laptop: `--num-workers 1` (16 GB RAM); disable idle sleep for overnight chains.
+
+## The paper model (fixed 2026-11-24)
+
+- **Teacher:** ConvNeXt-small U-Net + slope loss, recipe `x_slope_s11` (`results/x_slope_s11_ep150`):
+  reported 4.6692, last 4.752, late-average 4.783. Seed-7 twin `x_slope`: 4.8061 / 4.836 / 4.914.
+- **Student:** FastViT-SA12 distilled from that teacher, recipe `cnx_fastvit_kd_xslope`
+  (`results/cnx_fastvit_kd_xslope_ep150`): reported 4.9762, last 5.001, late-average 5.053. One seed.
+- **The student was trained without the slope loss** (its log shows `'slope': 0.0`): `_kd_ens` builds
+  it from the base recipe and only swaps the teacher. It inherits the slope loss only through the
+  teacher's distributions. A student trained with slope loss *and* this teacher has not been run.
+- Paper draft (IEEE TGRS format, kept outside the repo as `TVT_IEEE.pdf`) Table II still quotes the
+  September student `cnx_fastvit_kd_small` (4.83), which did not reproduce (5.18 / 5.31 retrained).
+- `rogii_champion/` is a separate reimplementation (30-epoch fold-0 base 13.52 ft). Its numbers must
+  not appear beside this pipeline's.
