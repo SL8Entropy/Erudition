@@ -7,6 +7,7 @@ except the data and the pretrained weights (see Setup).
 | File | What it is |
 |---|---|
 | `PLAN.md` | What is ablated, which runs, and how a result is judged. **Read first.** |
+| `TEAM_PLAN.md` | Who runs what on laptops A–D: setup, fit test, per-laptop commands, hand-over to D. |
 | `COMMANDS.md` | Every command, in the order to run them, with a one-line explanation each. |
 | `RESULTS_LOG.md` | Fill in one row after each run finishes. |
 | `pipeline/` | The training code: a copy of `kaggle_1st_place/solution` (commit `2ac58d6`), trimmed to what these runs use. Run everything from here, not from `kaggle_1st_place/solution`. |
@@ -60,4 +61,4 @@ Nothing important stays only in the terminal. Each run writes to `pipeline\resul
 | `holdout_predictions.pqt` (37 MB) | every holdout row's prediction; needed by the compare step | no, copy by hand |
 | `models.pkl` (~205 MB) | trained weights; teachers' weights are needed by the student runs | no, copy by hand |
 
-After each run, copy its numbers into `RESULTS_LOG.md` and commit.
+After each run, the folder goes to laptop D, and D copies its numbers into `RESULTS_LOG.md` and commits (see `TEAM_PLAN.md` §5–6).

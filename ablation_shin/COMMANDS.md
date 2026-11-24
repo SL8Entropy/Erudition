@@ -1,8 +1,13 @@
 # Commands, in order
 
-Run in **cmd.exe** (not PowerShell, not bash), on **laptop D**, one block at a time.
-Each training command takes about 2 h. Do not start the next block until the current one has finished.
-After every block, fill in its row in `RESULTS_LOG.md`.
+This is the master list of all 13 runs, written from laptop D's point of view.
+**Who runs which block: `TEAM_PLAN.md`.**
+- Blocks 3, 6, 7, 8 and 11 are trained on laptops A, B and C. D runs only their compare lines, once their folders have been copied to D.
+- In blocks 4, 5, 12 and 13, run each compare line once its reference folder (`cnx_fastvit_s1` or `cnx_fastvit_s2`, from A or B) is on D.
+
+Run in **cmd.exe** (not PowerShell, not bash), one block at a time.
+Each training command takes about 2 h on D. Do not start the next block until the current one has finished.
+After every block, fill in its row in `RESULTS_LOG.md`. Only D edits that file.
 
 ## 0. Every time you open a new terminal
 

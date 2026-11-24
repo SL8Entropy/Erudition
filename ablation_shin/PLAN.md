@@ -66,13 +66,11 @@ A synthetic well replaces a real sample instead of being added, so every epoch s
 
 ## Where it runs
 
-**Everything runs on laptop D (RTX 5060 8 GB, ~2 h per run).** It has the cached weights, and the students need the teacher weights it produces.
-
-Laptop C (RTX 3050 6 GB, ~5 h per run) can take C1/D1/D2 if time runs short. First copy D's whole
-`results\x_slope_s1_ep150\` folder into C's `pipeline\results\`, because it is their reference. The 4 GB laptops are not used:
-ConvNeXt-small needs ~3.9 GiB at batch 4.
-
-Every laptop must use the same commit of this repo.
+The split across the four laptops, setup, per-laptop commands and the hand-over to D are in **`TEAM_PLAN.md`**:
+- D runs every teacher and every student.
+- C runs C1, D1 and D2.
+- A and B run the two FastViT-without-teacher runs, if they pass a fit test.
+- Only D runs the compare steps and commits `RESULTS_LOG.md`.
 
 ## Recipes
 

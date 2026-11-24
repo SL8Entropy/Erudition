@@ -1,6 +1,6 @@
 # Results log
 
-Fill in one row as soon as a run (one block of `COMMANDS.md`) finishes, then commit.
+Laptop D fills in one row as soon as a run finishes (its own, or a folder copied in from A, B or C), then commits. Nobody else edits this file.
 Never edit a filled row except to add to its Notes. If a run is redone, add a new row.
 
 **Where each number comes from** (all files are in `pipeline\results\<recipe>_ep150\`):
@@ -18,16 +18,16 @@ Never edit a filled row except to add to its Notes. If a run is redone, add a ne
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `small_s1` | A0 | 1 | | D | | | | — | — | — | — | |
 | 2 | `x_slope_s1` | A1 | 1 | | D | | | | `small_s1` | | | | |
-| 3 | `cnx_fastvit_s1` | B0 | 1 | | D | | | | — | — | — | — | |
+| 3 | `cnx_fastvit_s1` | B0 | 1 | | A | | | | — | — | — | — | |
 | 4 | `cnx_fastvit_kd_small_s1` | B1 | 1 | | D | | | | `cnx_fastvit_s1` | | | | |
 | 5a | `cnx_fastvit_kd_xslope_s1` | B2 | 1 | | D | | | | `cnx_fastvit_s1` | | | | |
 | 5b | ″ | B2 | 1 | | | | | | `cnx_fastvit_kd_small_s1` | | | | same run as 5a, second comparison |
-| 6 | `x_slope_nosynth_s1` | C1 | 1 | | D | | | | `x_slope_s1` | | | | |
-| 7 | `x_slope_nocost_s1` | D1 | 1 | | D | | | | `x_slope_s1` | | | | |
-| 8 | `x_slope_nogeo_s1` | D2 | 1 | | D | | | | `x_slope_s1` | | | | |
+| 6 | `x_slope_nosynth_s1` | C1 | 1 | | C | | | | `x_slope_s1` | | | | |
+| 7 | `x_slope_nocost_s1` | D1 | 1 | | C | | | | `x_slope_s1` | | | | |
+| 8 | `x_slope_nogeo_s1` | D2 | 1 | | C | | | | `x_slope_s1` | | | | |
 | 9 | `small_s2` | A0 | 2 | | D | | | | — | — | — | — | |
 | 10 | `x_slope_s2` | A1 | 2 | | D | | | | `small_s2` | | | | |
-| 11 | `cnx_fastvit_s2` | B0 | 2 | | D | | | | — | — | — | — | |
+| 11 | `cnx_fastvit_s2` | B0 | 2 | | B | | | | — | — | — | — | |
 | 12 | `cnx_fastvit_kd_small_s2` | B1 | 2 | | D | | | | `cnx_fastvit_s2` | | | | |
 | 13a | `cnx_fastvit_kd_xslope_s2` | B2 | 2 | | D | | | | `cnx_fastvit_s2` | | | | |
 | 13b | ″ | B2 | 2 | | | | | | `cnx_fastvit_kd_small_s2` | | | | same run as 13a, second comparison |
