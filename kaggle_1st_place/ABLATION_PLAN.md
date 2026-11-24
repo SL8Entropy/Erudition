@@ -1,14 +1,16 @@
 # Ablation plan for the TVT paper (`TVT_IEEE.pdf`)
 
-**Model under test.** Teacher: ConvNeXt-small U-Net trained with the slope loss (`x_slope`).
-Deployed model: FastViT-SA12 student distilled from that teacher (`cnx_fastvit_kd_xslope`).
+**Model under test.** Teacher: ConvNeXt-small U-Net trained with the slope loss.
+Deployed model: FastViT-SA12 student distilled from that teacher.
 Everything here uses the `kaggle_1st_place` pipeline only. `rogii_champion` results stay out.
 
 ## Protocol (same for every arm)
 
 - Fixed sorted 80/20 split: train 618 wells, score 155 holdout wells (754,122 rows).
 - 150 epochs, batch 4 × accumulation 4, `--num-workers 1`.
-- Two seeds per arm, **7 and 11**. Only training randomness changes; the split is fixed.
+- **Seeds 1 and 2 for every arm.** Add seeds 3 and 4 only if a result is unclear.
+  Only training randomness changes; the split is fixed.
+- Earlier runs used seeds 7 and 11. They stay in `EXPERIMENTS_2026-10.md` as history and do not go in the paper tables.
 - **Primary metric:** late-average RMSE (mean holdout RMSE over epochs 100–150), from `seq_NN_honest_curve.py`.
   "Reported" (best-checkpoint) RMSE goes in a secondary column only.
 - **A change counts as real** only if:
@@ -20,69 +22,67 @@ Everything here uses the `kaggle_1st_place` pipeline only. `rogii_champion` resu
 
 ## The four ablations
 
-✅ = already run. 🆕 = to run. Each run is ~2 h on laptop D (RTX 5060).
+Every arm needs two runs: `<recipe>_s1` and `<recipe>_s2`. Each run takes about 2 h on laptop D (RTX 5060).
 
 ### A. Slope loss (the paper's new loss term)
 Question: does the slope term improve the ConvNeXt-small network?
 
-| Arm | Recipe | seed 7 | seed 11 |
-|---|---|---|---|
-| A0 no slope loss (control) | `0801_V2` / `small_s11` | ✅ `0801_V2_ep150_local` | 🆕 `small_s11` |
-| A1 with slope loss (teacher) | `x_slope` / `x_slope_s11` | ✅ | ✅ |
-
-New runs: **1**.
+| Arm | Recipe |
+|---|---|
+| A0 ConvNeXt-small, no slope loss | `small_s1`, `small_s2` |
+| A1 ConvNeXt-small + slope loss (**teacher**) | `x_slope_s1`, `x_slope_s2` |
 
 ### B. Knowledge distillation (how the deployed model is obtained)
 Question: does distillation help FastViT, and does a slope-loss teacher make a better student?
 
-| Arm | Recipe | seed 7 | seed 11 |
-|---|---|---|---|
-| B0 FastViT, no teacher | `cnx_fastvit` | ✅ (`cnx_fastvit_ep150`, older GPU) | 🆕 `cnx_fastvit_s11` |
-| B1 FastViT ← plain ConvNeXt-small | `cnx_fastvit_kd_small_local` | ✅ | 🆕 `cnx_fastvit_kd_small_local_s11` |
-| B2 FastViT ← slope teacher (**final model**) | `cnx_fastvit_kd_xslope` | ✅ | 🆕 `cnx_fastvit_kd_xslope_s11` |
+| Arm | Recipe | Teacher |
+|---|---|---|
+| B0 FastViT, no teacher | `cnx_fastvit_s1`, `_s2` | none |
+| B1 FastViT ← plain ConvNeXt-small | `cnx_fastvit_kd_small_s1`, `_s2` | A0 with the same seed |
+| B2 FastViT ← slope teacher (**final model**) | `cnx_fastvit_kd_xslope_s1`, `_s2` | A1 with the same seed |
 
-The teacher stays fixed across seeds: `0801_V2_ep150_local` for B1, and `x_slope_s11_ep150` for B2.
-New runs: **3**. Run these on laptop D, because the teacher weights (`models.pkl`) exist only there.
+Each student learns from the teacher that has the same seed, so no teacher is picked after seeing results.
+B1 and B2 can start only after their teacher run has finished.
 
 ### C. Synthetic training wells (85% of training samples)
 Question: are the synthetic wells needed? A synthetic well replaces a real sample, so an epoch has the same number of samples; only the share of synthetic wells changes.
 
-| Arm | Change | seed 7 | seed 11 |
-|---|---|---|---|
-| C0 reference | `x_slope` / `x_slope_s11` | ✅ | ✅ |
-| C1 no synthetic wells | slope recipe + `sim_cfg['z_shift']['apply_prob'] = 0` | 🆕 `x_slope_nosynth` | 🆕 `x_slope_nosynth_s11` |
-
-New runs: **2**.
+| Arm | Change |
+|---|---|
+| C1 `x_slope_nosynth_s1`, `_s2` | A1 + `sim_cfg['z_shift']['apply_prob'] = 0`; compared with A1 |
 
 ### D. Input representation (the mismatch volume and the geo prior)
 Question: do the two key engineered channels carry the result?
 
-| Arm | Change | seed 7 | seed 11 |
-|---|---|---|---|
-| D0 reference | `x_slope` / `x_slope_s11` | ✅ | ✅ |
-| D1 no mismatch (cost-volume) channel | slope recipe without `gr_abs_diff` (channel 3) | 🆕 `x_slope_nocost` | 🆕 `x_slope_nocost_s11` |
-| D2 no geo-prior channel | slope recipe without `geo_tvt_diff` (channel 16) | 🆕 `x_slope_nogeo` | 🆕 `x_slope_nogeo_s11` |
+| Arm | Change |
+|---|---|
+| D1 `x_slope_nocost_s1`, `_s2` | A1 without `gr_abs_diff` (channel 3); compared with A1 |
+| D2 `x_slope_nogeo_s1`, `_s2` | A1 without `geo_tvt_diff` (channel 16); compared with A1 |
 
-New runs: **4**. Build these with `make_feature_remove_cfg(static_remove=...)` plus the slope settings.
+**Total: 8 arms × 2 seeds = 16 runs, about 32 GPU-hours.**
 
-**Total new runs: 10** (about 20 GPU-hours on laptop D).
+## Run order
+
+1. **Teachers first:** `small_s1`, `x_slope_s1`. Everything else depends on these two.
+2. **Seed 1 of every other arm:** `cnx_fastvit_s1`, `cnx_fastvit_kd_small_s1`, `cnx_fastvit_kd_xslope_s1`, `x_slope_nosynth_s1`, `x_slope_nocost_s1`, `x_slope_nogeo_s1`.
+3. **Seed 2 of everything,** in the same order. Teachers first again.
+
+Stopping after step 2 gives a complete seed-1 table to start writing from.
 
 ## Recipes to add in `experiments/bilzard/seq_NN_cfg.py`
 
-Copy `slope_cfg` exactly, change one thing, and add a seed-11 twin of each:
-`cnx_fastvit_kd_small_local_s11`, `cnx_fastvit_kd_xslope_s11`, `x_slope_nosynth(_s11)`,
-`x_slope_nocost(_s11)`, `x_slope_nogeo(_s11)`.
+All 16 recipes are new; no existing recipe uses seed 1 or 2.
 
-`small_s11` and `cnx_fastvit_s11` already exist.
-
-Do not use the existing `cnx_fastvit_kd_small_s11` recipe. Its teacher, `results/0801_V2_ep150`, has no weights on this machine.
+- Build each one from the existing recipe of the same name with `_seeded(..., seed)`.
+- Point the teacher paths at `results/<teacher>_s<seed>_ep150`.
+- `x_slope_nosynth`, `x_slope_nocost` and `x_slope_nogeo` copy `slope_cfg` exactly and change one thing. The two channel arms use `make_feature_remove_cfg(static_remove=...)` plus the slope settings.
 
 ## Machine assignment
 
 | Laptop | Runs |
 |---|---|
-| D (RTX 5060 8 GB) | the three B runs, `small_s11`, D1 ×2 (≈12 h) |
-| C (RTX 3050 6 GB, ~5 h/run) | C1 ×2 and D2 ×2 if time allows; otherwise D takes D2 |
+| D (RTX 5060 8 GB) | both teachers, then every B run (the students need the teacher weights, which stay on D) |
+| C (RTX 3050 6 GB, ~5 h/run) | C1 and D1/D2, once `x_slope_s1` has finished on D (C needs a copy of that result as its comparison reference) |
 | A, B (4 GB) | ConvNeXt-small peaks at ~3.9 GiB at batch 4, so it probably will not fit. Run a 1-epoch fit test first; if it fits, take D2. |
 
 All laptops must run the same commit of `main`.
@@ -99,7 +99,7 @@ To run several recipes back to back: `bash analysis/run_chain.sh <recipe> <recip
 
 ## Paper table (one row per arm)
 
-| Arm | Late-avg seed 7 | Late-avg seed 11 | Mean | Δ vs reference | k\* / bootstrap | Network ms |
+| Arm | Late-avg seed 1 | Late-avg seed 2 | Mean | Δ vs reference | k\* / bootstrap | Network ms |
 |---|---|---|---|---|---|---|
 
 Supplementary result, no training needed: the decoder comparison already measured on saved posteriors
