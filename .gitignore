@@ -76,3 +76,6 @@
 # Python bytecode
 __pycache__/
 *.pyc
+
+# LibreOffice lock files
+.~lock.*#

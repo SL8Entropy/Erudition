@@ -1,14 +1,18 @@
 # ROGII Wellbore Geology Prediction (Erudition)
 
-This repository contains the codebase for AI wellbore geology prediction, drawing heavily on top-performing solutions (1st and 2nd place) from the SPWLA 2024 AI competition. It contains different iterations and architectures of sequence-based neural networks (ConvNeXt U-Nets, AnchorCNN, etc.) used to map horizontal well gamma-ray logs to true vertical thickness (TVT).
+This repository contains the codebase for predicting true vertical thickness (TVT) from horizontal-well gamma-ray logs. It builds on the top solutions (1st and 2nd place) of the [ROGII Wellbore Geology Prediction](https://www.kaggle.com/competitions/rogii-wellbore-geology-prediction) Kaggle competition (2026), and contains several sequence-network designs (ConvNeXt U-Nets, AnchorCNN, etc.).
+
+**Start with `CLAUDE.md`.** It states the current status, the paper model and the working rules.
 
 ## Directory Structure
 
-- `/train/`: Contains the training dataset, structured as 773 pairs of `*__horizontal_well.csv` and `*__typewell.csv`.
-- `/rogii_champion/`: A working framework based on the 1st place solution (private LB 5.639) plus five iterative enhancements.
-- `/kaggle2ndplace/`: Source code and local training tools reproducing the 2nd place weights (private LB 5.802).
-- `/kaggle_1st_place/`: Comprehensive repository of the 1st place solution, containing all original competition models and reproduction scripts.
-- Root scripts and notebooks (`*.py`, `*.ipynb`): High-level inference and ensemble submission scripts.
+- `/kaggle_1st_place/`: the 1st-place pipeline, with the archived competition models and reproduction scripts. **The paper is built on this pipeline.**
+- `/ablation_shin/`: the paper's ablation study. Its plan, the commands to run in order, a results log and its own copy of the pipeline.
+- `/rogii_champion/`: a separate reimplementation of the 1st-place solution with five variants. Not used in the paper.
+- `/kaggle2ndplace/`: the 2nd-place AnchorCNN code and local training tools (private LB 5.802).
+- `/wellbore-ml-gaps/`: the literature and competition review.
+- `rogii_exp417_gnll_five_groupkfold_submit.py`: the one root script, a Kaggle submission script.
+- **Data is not in git.** The 773 labelled wells (`*__horizontal_well.csv` and `*__typewell.csv` files, 1.4 GB) live in `kaggle_1st_place/solution/data/`.
 
 ## Commands to Train and Test Models
 
@@ -20,7 +24,7 @@ The main entry point for the champion framework is `rogii_champion/run.py`.
   ```bash
   python rogii_champion/run.py train --variant base --out rogii_champion/runs --folds 0 --num-workers 3
   ```
-  *What it does:* Creates a new folder inside `rogii_champion/runs/base/` containing model checkpoints (`.pt`), tensorboard logs, and training metrics for the specified variant.
+  *What it does:* Writes model checkpoints (`.pt`), a `manifest.json` and per-fold report JSON files into `rogii_champion/runs/base/`. Pass `--data-root` if the `train/` and `test/` folders are not found automatically.
 
 - **Out-Of-Fold (OOF) Inference / Testing:**
   ```bash
@@ -46,23 +50,23 @@ The 2nd place solution is trained via `kaggle2ndplace/anchor_train.py`.
 
 - **Evaluation:**
   ```bash
-  python kaggle2ndplace/anchor_eval.py --weights kaggle2ndplace/runs/dzl_w1/model.pt
+  python kaggle2ndplace/anchor_eval.py --models kaggle2ndplace/runs/dzl_w1/model.pt
   ```
   *What it does:* Evaluates an existing checkpoint on the 20% holdout set and prints RMSE metrics.
 
 ### 3. The `kaggle_1st_place` Framework
 
-The 1st place reproducible pipeline is managed via `seq_NN_main_reproduce.py`.
+Run these from `kaggle_1st_place/solution/`. `kaggle_1st_place/CLAUDE.md` describes the pipeline in detail.
 
-- **Training/Reproducing archived models:**
+- **Reproducing an archived competition model** (15-fold cross-validation over all 773 wells; slow):
   ```bash
-  python kaggle_1st_place/solution/seq_NN_main_reproduce.py --id 0801_V2 --output-dir kaggle_1st_place/solution/results/0801_V2
+  python seq_NN_main_reproduce.py --id 0801_V2
   ```
-  *What it does:* Creates the `kaggle_1st_place/solution/results/0801_V2/` folder containing configuration files (`cfg.pkl`), trained neural network weights, and validation logs for the specific original recipe `0801_V2`.
+  *What it does:* Writes `cfg.pkl`, the trained weights and the logs for the original recipe `0801_V2` to `reproduction_outputs/0801_V2/`.
 
 - **Evaluating Experimental Forks (e.g., Bilzard / Arch):**
   ```bash
-  python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name NAME --epochs 150 --output-dir results/NAME_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4
+  python seq_NN_holdout_eval.py --id 0801_V2 --source-dir experiments/bilzard --cfg-name NAME --epochs 150 --output-dir results/NAME_ep150 --device cuda --offline-timm --batch-size 4 --val-batch-size 4 --grad-accum-steps 4 --num-workers 1
   ```
   *What it does:* Runs an 80/20 train/holdout evaluation using an edited experimental fork (`experiments/bilzard` or `experiments/arch`), pulling a specific configuration `NAME` from that fork's registry rather than the archived defaults. Output lands in `results/NAME_ep150`.
 
@@ -141,8 +145,8 @@ The 1st place reproducible pipeline is managed via `seq_NN_main_reproduce.py`.
 ### `kaggle_1st_place/solution/`
 - **`seq_NN_main_reproduce.py`**: CLI script to reproduce legacy training recipes using archived snapshots.
 - **`seq_NN_holdout_eval.py`**: Evaluates the trained Sequence-NN on a holdout set, producing scores directly comparable across iterations.
-- **`seq_NN_honest_curve.py`**: Calculates validation metrics while preventing target leakage.
-- **`seq_NN_rescore.py`**: A utility script to rescore existing predictions against the ground truth.
+- **`seq_NN_honest_curve.py`**: Reads a run's log and prints its best-epoch, last-epoch and late-average (epochs 100–150) holdout RMSE. The late average is the honest score: the best epoch was chosen on the holdout wells.
+- **`seq_NN_rescore.py`**: Re-scores the saved weights of a finished run (optionally with MD-phase TTA or reparameterisation) without retraining.
 - **`seq_NN_robust_compare.py`**: Compares prediction outputs (e.g., `holdout_predictions.pqt`) between different model runs to analyze improvements.
 - **`generate_train_geo_map.py`**: Pre-computes spatial/geological mapping features for the training data.
 - **`verify_cfg.py`**: Validates configuration integrity before kicking off large training jobs.
