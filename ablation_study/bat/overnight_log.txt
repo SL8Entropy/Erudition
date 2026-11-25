@@ -1,0 +1,23 @@
+Starting run_06_x_slope_nosynth_s1 at 25/11/2026 22:06:55.30 
+
+=== Training x_slope_nosynth_s1 ===
+Traceback (most recent call last):
+  File "C:\Users\sudha\Documents\Erudition\ablation_study\pipeline\seq_NN_holdout_eval.py", line 419, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "C:\Users\sudha\Documents\Erudition\ablation_study\pipeline\seq_NN_holdout_eval.py", line 415, in main
+    return run(args)
+           ^^^^^^^^^
+  File "C:\Users\sudha\Documents\Erudition\ablation_study\pipeline\seq_NN_holdout_eval.py", line 193, in run
+    repro.check_runtime_dependencies()
+  File "C:\Users\sudha\Documents\Erudition\ablation_study\pipeline\seq_NN_main_reproduce.py", line 143, in check_runtime_dependencies
+    raise RuntimeError(
+RuntimeError: Missing sequence-NN dependencies:
+  timm (No module named 'torchvision')
+Install the pinned packages from requirements.txt before training.
+
+=== x_slope_nosynth_s1 STOPPED. See the message above. ===
+Press any key to continue . . . 
+Terminate batch job (Y/N)? 
+^CTerminate batch job (Y/N)? 
+^CTerminate batch job (Y/N)? 
