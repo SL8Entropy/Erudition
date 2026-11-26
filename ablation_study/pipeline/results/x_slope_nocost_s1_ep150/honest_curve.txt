@@ -1,0 +1,2 @@
+run                                  picked           last  late avg     sd  flattery
+x_slope_nocost_s1_ep150       4.8651 @  80  5.0267 @ 150    5.0451  0.064     0.180

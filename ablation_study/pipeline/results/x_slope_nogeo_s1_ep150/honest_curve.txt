@@ -1,0 +1,2 @@
+run                                  picked           last  late avg     sd  flattery
+x_slope_nogeo_s1_ep150        8.5990 @  85  8.8435 @ 150    8.9110  0.087     0.312

@@ -1,0 +1,2 @@
+run                                  picked           last  late avg     sd  flattery
+x_slope_nosynth_s1_ep150      6.6836 @  30  7.6562 @ 150    7.6261  0.063     0.942
