@@ -6,4 +6,6 @@ if errorlevel 1 (
 ) else (
   echo Sleep timeout on AC power set back to 5 minutes.
 )
-echo "%cmdcmdline%" | find /i "/c" >nul && pause
+if not defined NOPAUSE (
+  echo "%cmdcmdline%" | find /i "/c" >nul && pause
+)

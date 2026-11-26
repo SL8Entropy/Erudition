@@ -3,6 +3,22 @@
 This is the master command list, written from the point of view of **laptop D**.
 Who trains which run is in `TEAM_PLAN.md`.
 
+## Unattended runs (overnight)
+
+Double-click `bat\queue_<your laptop>.bat` (see `TEAM_PLAN.md` §4). It runs this laptop's blocks below in order, never waits for a key, carries on past a failed run, and saves each run's full console output. The rest of this file is for running blocks by hand.
+
+## Which number is which
+
+Every run writes three files with RMSE values. They measure different things:
+
+| File | Line | What it is |
+|---|---|---|
+| `seq_nn.log`, `holdout_metrics.json` | `HOLDOUT POOLED RMSE` | **"Reported":** the epoch that scored best on the 155 test wells, smoothed. Optimistic; secondary only. |
+| `honest_curve.txt` | `late avg` | **The paper's number:** mean raw holdout RMSE over epochs 100–150. |
+| `compare_vs_<run>.txt` | `pooled RMSE`, `k* =`, `bootstrap` | The two runs side by side, and whether the difference holds up |
+
+A run without a `HOLDOUT POOLED RMSE` line did not finish: read its console log.
+
 ## Rules (read first)
 
 1. **Shell:** use **cmd.exe** (not PowerShell, not bash).

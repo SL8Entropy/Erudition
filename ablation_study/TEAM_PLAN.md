@@ -91,13 +91,34 @@ python seq_NN_holdout_eval.py %COMMON% --epochs 1 --cfg-name cnx_fastvit_s1 --ou
 
 ---
 
-## 4. Commands per laptop
+## 4. Running your queue (unattended, overnight)
 
-Each run is two commands:
-1. Train and score, which writes `results\<recipe>_ep150\`.
-2. Save the late-average score into that folder.
+**Double-click your laptop's file in `ablation_study\bat\`:**
 
-Run them one after the other and wait for each to finish. A run refuses to start if its results folder already exists. Never delete a finished run; if a run fails, rename its folder to `results\_failed_<recipe>` and tell D.
+| Laptop | File | Runs, in order |
+|---|---|---|
+| A | `queue_A.bat` | `cnx_fastvit_s1` |
+| B | `queue_B.bat` | `cnx_fastvit_s2` |
+| C | `queue_C.bat` | `x_slope_nosynth_s1` → `x_slope_nocost_s1` → `x_slope_nogeo_s1` |
+| D | `queue_D.bat` | `small_s1` → `x_slope_s1` → `cnx_fastvit_kd_small_s1` → `cnx_fastvit_kd_xslope_s1` → `small_s2` → `x_slope_s2` → `cnx_fastvit_kd_small_s2` → `cnx_fastvit_kd_xslope_s2` |
+
+A queue:
+- **Never waits for a key between runs.** If a run fails, the queue logs the failure and starts the next run.
+- **Saves the full console output of every run:**
+  - finished run: `results\<recipe>_ep150\console_log.txt`
+  - failed run: `results\_console\<recipe>.txt`
+- **Writes one start/end line per run** to `results\_console\queue_<computer name>.txt`. Check that file in the morning.
+- **Turns sleep off at the start and back on at the end.**
+
+To watch a run live, open its log in a second window:
+`powershell Get-Content -Wait results\_console\<recipe>.txt`
+
+Each run also writes its training curve to `seq_nn.log`: training loss, each loss term, holdout RMSE and learning rate, every 5 epochs.
+
+Do not click inside a running cmd window. Clicking starts text selection, which **freezes the program** until you press Esc.
+A run refuses to start if its results folder already exists. Never delete a finished run; if a run fails, rename its folder to `results\_failed_<recipe>` and tell D.
+
+The commands below are what each queue runs. Use them only if you are running by hand.
 
 ### Laptop A
 ```bat
@@ -126,6 +147,16 @@ python seq_NN_honest_curve.py results/x_slope_nogeo_s1_ep150 > results/x_slope_n
 ### Laptop D
 D follows `ablation_study/COMMANDS.md`: blocks 1, 2, 4, 5, 9, 10, 12 and 13 (= D-1 … D-8). It skips blocks 3, 6, 7, 8 and 11, which the other laptops run.
 D-3/D-4 must wait for D-1/D-2, and D-7/D-8 for D-5/D-6, because each student loads its teacher. The queue order already guarantees this.
+
+### Before comparing anything: check the protocol (D)
+
+Once runs are on D, run this in `ablation_study\pipeline`:
+```bat
+python check_protocol.py
+```
+For every finished run, it shows the one setting its recipe changes, plus every run-time setting (epochs, batch size, ...).
+It prints `OK` only if all runs share identical run-time settings. Otherwise it lists the run that differs.
+`num_workers` may differ between laptops: it changes speed, not the method.
 
 ---
 

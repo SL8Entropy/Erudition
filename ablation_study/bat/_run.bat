@@ -46,5 +46,8 @@ echo.
 echo === %CFG% STOPPED. See the message above. ===
 set "RC=1"
 :end
-echo "%cmdcmdline%" | find /i "/c" >nul && pause
+rem Pause only when double-clicked. queue.bat sets NOPAUSE so unattended runs never wait for a key.
+if not defined NOPAUSE (
+  echo "%cmdcmdline%" | find /i "/c" >nul && pause
+)
 exit /b %RC%

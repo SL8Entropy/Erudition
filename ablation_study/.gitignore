@@ -8,3 +8,7 @@ __pycache__/
 pipeline/reproduction_outputs/
 pipeline/PF_cache/
 .venv/
+# logs written by hand-made overnight scripts
+bat/*.txt
+# test runs of check_protocol.py
+pipeline/_check_tmp/
