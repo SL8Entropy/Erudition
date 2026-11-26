@@ -16,7 +16,7 @@ Never edit a filled row except to add to its Notes. If a run is redone, add a ne
 
 | # | Recipe | Arm | Seed | Finished (date) | Laptop | Reported | Last | **Late avg** | Reference | Δ late avg | k\* | Bootstrap % | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | `small_s1` | A0 | 1 | | D | | | | — | — | — | — | |
+| 1 | `small_s1` | A0 | 1 | 2026-11-26 | D | 4.778 | 5.002 | **5.025** | — | — | — | — | picked ep 75 (raw 4.825); late sd 0.052; flattery 0.200 |
 | 2 | `x_slope_s1` | A1 | 1 | | D | | | | `small_s1` | | | | |
 | 3 | `cnx_fastvit_s1` | B0 | 1 | | A | | | | — | — | — | — | |
 | 4 | `cnx_fastvit_kd_small_s1` | B1 | 1 | | D | | | | `cnx_fastvit_s1` | | | | |
