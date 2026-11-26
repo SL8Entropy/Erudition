@@ -17,9 +17,9 @@ Never edit a filled row except to add to its Notes. If a run is redone, add a ne
 | # | Recipe | Arm | Seed | Finished (date) | Laptop | Reported | Last | **Late avg** | Reference | Δ late avg | k\* | Bootstrap % | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `small_s1` | A0 | 1 | 2026-11-26 | D | 4.778 | 5.002 | **5.025** | — | — | — | — | picked ep 75 (raw 4.825); late sd 0.052; flattery 0.200 |
-| 2 | `x_slope_s1` | A1 | 1 | | D | | | | `small_s1` | | | | |
+| 2 | `x_slope_s1` | A1 | 1 | 2026-11-27 | D | 4.820 | 4.909 | **5.006** | `small_s1` | −0.020 | 0 | 40.0 | VERDICT REJECT (picked-checkpoint delta +0.043). picked ep 120 (raw 4.854); late sd 0.195, spikes at ep 105 (5.23) and 110 (5.54); flattery 0.151. Laptop was in standby 20:44–23:32 (charger out) between ep 65 and 70; the run resumed. |
 | 3 | `cnx_fastvit_s1` | B0 | 1 | | A | | | | — | — | — | — | |
-| 4 | `cnx_fastvit_kd_small_s1` | B1 | 1 | | D | | | | `cnx_fastvit_s1` | | | | |
+| 4 | `cnx_fastvit_kd_small_s1` | B1 | 1 | 2026-11-27 | D | 4.901 | 4.924 | **4.955** | `cnx_fastvit_s1` | | | | teacher `small_s1`. picked ep 135 (raw 4.924); late sd 0.037; flattery 0.031. Compare pending: `cnx_fastvit_s1` (laptop A) not on D yet. |
 | 5a | `cnx_fastvit_kd_xslope_s1` | B2 | 1 | | D | | | | `cnx_fastvit_s1` | | | | |
 | 5b | ″ | B2 | 1 | | | | | | `cnx_fastvit_kd_small_s1` | | | | same run as 5a, second comparison |
 | 6 | `x_slope_nosynth_s1` | C1 | 1 | | C | | | | `x_slope_s1` | | | | |
