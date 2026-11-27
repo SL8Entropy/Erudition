@@ -29,8 +29,8 @@ Never edit a filled row except to add to its Notes. If a run is redone, add a ne
 | 10 | `x_slope_s2` | A1 | 2 | 2026-11-27 | D | 5.145 | 5.359 | **5.419** | `small_s2` | −0.178 | 16 | 56.6 | Script VERDICT ACCEPT (picked-checkpoint delta −0.028), but bootstrap < 90%. picked ep 90 (raw 5.177); late sd 0.081; flattery 0.243 |
 | 11 | `cnx_fastvit_s2` | B0 | 2 | | B | | | | — | — | — | — | |
 | 12 | `cnx_fastvit_kd_small_s2` | B1 | 2 | 2026-11-27 | D | 5.343 | 5.554 | **5.567** | `cnx_fastvit_s2` | | | | teacher `small_s2`. picked ep 90 (raw 5.368); late sd 0.084; flattery 0.199. Compare pending: `cnx_fastvit_s2` (laptop B) not on D yet. |
-| 13a | `cnx_fastvit_kd_xslope_s2` | B2 | 2 | | D | | | | `cnx_fastvit_s2` | | | | |
-| 13b | ″ | B2 | 2 | | | | | | `cnx_fastvit_kd_small_s2` | | | | same run as 13a, second comparison |
+| 13a | `cnx_fastvit_kd_xslope_s2` | B2 | 2 | 2026-11-27 | D | 4.998 | 5.124 | **5.142** | `cnx_fastvit_s2` | | | | teacher `x_slope_s2`. picked ep 70 (raw 5.022); late sd 0.030; flattery 0.120. Compare pending: `cnx_fastvit_s2` (laptop B) not on D yet. Laptop hibernated 08:44–10:46 (lid closed, charger out) between ep 40 and 45; the run resumed. |
+| 13b | ″ | B2 | 2 | | | | | | `cnx_fastvit_kd_small_s2` | −0.425 | 3 | 93.3 | same run as 13a, second comparison. VERDICT REJECT (k\* 3 < 10; picked-checkpoint delta −0.345; 77/155 wells better) |
 
 Optional seed-2 runs from step 4 (add rows only if they are run):
 
@@ -46,7 +46,7 @@ Decision rule from `PLAN.md`: every seed has the same sign, mean |Δ| ≥ 0.10 f
 | A. Slope loss | A1 vs A0 | −0.020 | −0.178 | −0.099 | not shown (mean \|Δ\| 0.099 < 0.10; bootstrap 40.0% / 56.6% < 90%; k\* 0 on seed 1) |
 | B. Distillation | B1 vs B0 | | | | |
 | B. Distillation | B2 vs B0 | | | | |
-| B. Slope teacher | B2 vs B1 | | | | |
+| B. Slope teacher | B2 vs B1 | −0.039 | −0.425 | −0.232 | not shown (same sign, mean \|Δ\| ≥ 0.10, but k\* 3 on seed 2 and bootstrap 76.9% on seed 1) |
 | C. Synthetic wells | C1 vs A1 | | | | |
 | D. Mismatch channel | D1 vs A1 | | | | |
 | D. Geo-prior channel | D2 vs A1 | | | | |
