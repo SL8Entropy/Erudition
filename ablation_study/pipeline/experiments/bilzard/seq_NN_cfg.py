@@ -3374,10 +3374,11 @@ def make_bilzard_cfgs():
         # screen and shares tiny's in12k_ft_in1k pretraining; its control is cnx_nano (no teacher).
         ("cnx_nano_kd_ens", _kd_ens("hf_hub:timm/convnext_nano.in12k_ft_in1k")),
         # ---- ablation_study (2026-11-24): the paper ablations, seeds 1 and 2 (see PLAN.md) ----
+        # Seed 3 added 2026-11-28 at the supervisor's request (arms A and B are run with it).
         # Each recipe is an existing one with only the seed changed, or x_slope with one thing
         # removed.  A student's teacher is the run with the same seed.
         *[(f"{name}_s{seed}", _seeded(make(seed), seed))
-          for seed in (1, 2)
+          for seed in (1, 2, 3)
           for name, make in (
               ("small", lambda s: deepcopy(base)),
               ("x_slope", lambda s: deepcopy(slope_cfg)),

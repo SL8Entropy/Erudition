@@ -188,6 +188,21 @@ D commits `RESULTS_LOG.md` after each update. Large files (`*.pqt`, `*.pkl`) sta
 
 ---
 
+## 6b. Seed-3 round (added 2026-11-28)
+
+The supervisor asked for one more seed. Seed 3 is run for arms A and B only (C1 and D2 are already shown with one seed).
+
+| Laptop | Double-click | Runs | Est. time |
+|---|---|---|---|
+| **D** | `bat\queue_D_s3.bat` | `small_s3` → `x_slope_s3` → `cnx_fastvit_kd_small_s3` → `cnx_fastvit_kd_xslope_s3` → `x_slope_nocost_s2` | ~9 h |
+| **B** | `bat\queue_B_s3.bat` | `cnx_fastvit_s3` | ~2 h |
+
+- Everyone first runs `git pull`: seed 3 needs the new recipes in `seq_NN_cfg.py`.
+- B keeps the protocol batch (4 × 4), as in `cnx_fastvit_s2`. Never change it to make a run fit.
+- **When B's run finishes, send D the whole folder, including `holdout_predictions.pqt` and `cfg.pkl`.** Git skips those two files (`.gitignore`), so a push alone is not enough. Use a USB stick, a shared drive or WhatsApp.
+
+---
+
 ## 7. Checklist
 
 - [ ] All four laptops report the same commit hash.

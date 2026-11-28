@@ -36,6 +36,18 @@ Optional seed-2 runs from step 4 (add rows only if they are run):
 
 | # | Recipe | Arm | Seed | Finished (date) | Laptop | Reported | Last | **Late avg** | Reference | Δ late avg | k\* | Bootstrap % | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 15 | `x_slope_nocost_s2` | D1 | 2 | | D | | | | `x_slope_s2` | | | | in `queue_D_s3.bat`, last. Test k\*/bootstrap in the claimed direction (full teacher vs removal). |
+
+Seed-3 round (added 2026-11-28 at the supervisor's request; arms A and B only):
+
+| # | Recipe | Arm | Seed | Finished (date) | Laptop | Reported | Last | **Late avg** | Reference | Δ late avg | k\* | Bootstrap % | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 17 | `small_s3` | A0 | 3 | | D | | | | — | — | — | — | |
+| 18 | `x_slope_s3` | A1 | 3 | | D | | | | `small_s3` | | | | |
+| 19 | `cnx_fastvit_s3` | B0 | 3 | | B | | | | — | — | — | — | |
+| 20 | `cnx_fastvit_kd_small_s3` | B1 | 3 | | D | | | | `cnx_fastvit_s3` | | | | |
+| 21a | `cnx_fastvit_kd_xslope_s3` | B2 | 3 | | D | | | | `cnx_fastvit_s3` | | | | |
+| 21b | ″ | B2 | 3 | | | | | | `cnx_fastvit_kd_small_s3` | | | | same run as 21a, second comparison |
 
 ## Ablation summary (fill when all seeds of an ablation are done; this is the paper table)
 
