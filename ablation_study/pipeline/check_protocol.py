@@ -12,10 +12,13 @@ Run from ablation_study/pipeline:
     python check_protocol.py --results some/dir
 """
 import argparse
+import pathlib
 import pickle
 import sys
 from pathlib import Path
 
+# cfg.pkl written by Python 3.13+ refers to pathlib._local.WindowsPath; older Pythons only have pathlib.
+sys.modules.setdefault("pathlib._local", pathlib)
 sys.path.insert(0, str(Path(__file__).parent / "experiments" / "bilzard"))
 import seq_NN_cfg  # noqa: E402  (needed to unpickle cfg.pkl and to read the recipes)
 
