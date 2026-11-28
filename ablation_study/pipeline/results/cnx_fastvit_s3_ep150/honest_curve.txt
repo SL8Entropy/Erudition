@@ -1,0 +1,2 @@
+run                                  picked           last  late avg     sd  flattery
+cnx_fastvit_s3_ep150          5.1524 @  95  5.3486 @ 150    5.3295  0.034     0.177
