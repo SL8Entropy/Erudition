@@ -18,7 +18,7 @@ Never edit a filled row except to add to its Notes. If a run is redone, add a ne
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `small_s1` | A0 | 1 | 2026-11-26 | D | 4.778 | 5.002 | **5.025** | — | — | — | — | picked ep 75 (raw 4.825); late sd 0.052; flattery 0.200 |
 | 2 | `x_slope_s1` | A1 | 1 | 2026-11-27 | D | 4.820 | 4.909 | **5.006** | `small_s1` | −0.020 | 0 | 40.0 | VERDICT REJECT (picked-checkpoint delta +0.043). picked ep 120 (raw 4.854); late sd 0.195, spikes at ep 105 (5.23) and 110 (5.54); flattery 0.151. Laptop was in standby 20:44–23:32 (charger out) between ep 65 and 70; the run resumed. |
-| 3 | `cnx_fastvit_s1` | B0 | 1 | 2026-11-26 | A | 5.272 | 5.364 | **5.390** | — | — | — | — | **Protocol deviation:** trained with batch 2 × grad accum 8 (protocol 4 × 4; same 16 samples per step, but FastViT's BatchNorm sees 2-sample batches). Kept by the owner's decision, 2026-11-27. picked ep 135 (raw 5.323); late sd 0.053; flattery 0.067. `check_protocol.py` will flag it once `cfg.pkl` is on D. |
+| 3 | `cnx_fastvit_s1` | B0 | 1 | 2026-11-26 | A | 5.272 | 5.364 | **5.390** | — | — | — | — | **Protocol deviation:** trained with batch 2 × grad accum 8 (protocol 4 × 4; same 16 samples per step, but FastViT's BatchNorm sees 2-sample batches). Kept by the owner's decision, 2026-11-27. picked ep 135 (raw 5.323); late sd 0.053; flattery 0.067. `check_protocol.py` will flag it once `cfg.pkl` is on D. 2026-11-28: `cfg.pkl` arrived; `check_protocol.py` flags exactly batch_size 2, val_batch_size 2, grad_accum_steps 8, and nothing else. |
 | 4 | `cnx_fastvit_kd_small_s1` | B1 | 1 | 2026-11-27 | D | 4.901 | 4.924 | **4.955** | `cnx_fastvit_s1` | −0.436 | 11 | 90.5 | teacher `small_s1`. picked ep 135 (raw 4.924); late sd 0.037; flattery 0.031. Compare pending: `cnx_fastvit_s1` (laptop A) not on D yet. 2026-11-27: Δ from A's honest curve; reference has a batch deviation (row 3); k\*/bootstrap wait for A's `holdout_predictions.pqt`. 2026-11-28: compare run (A's `.pqt` via WhatsApp): VERDICT ACCEPT, picked-checkpoint delta −0.371, 77/155 wells better. |
 | 5a | `cnx_fastvit_kd_xslope_s1` | B2 | 1 | 2026-11-27 | D | 4.803 | 4.866 | **4.916** | `cnx_fastvit_s1` | −0.475 | 117 | 94.3 | teacher `x_slope_s1`. picked ep 120 (raw 4.854); late sd 0.056; flattery 0.061. Compare pending: `cnx_fastvit_s1` (laptop A) not on D yet. 2026-11-27: Δ from A's honest curve; reference has a batch deviation (row 3); k\*/bootstrap wait for A's `holdout_predictions.pqt`. 2026-11-28: compare run: VERDICT ACCEPT, picked-checkpoint delta −0.470, 92/155 wells better. |
 | 5b | ″ | B2 | 1 | | | | | | `cnx_fastvit_kd_small_s1` | −0.039 | 65 | 76.9 | same run as 5a, second comparison. Script VERDICT ACCEPT (picked-checkpoint delta −0.099), but bootstrap < 90% and \|Δ\| < 0.10 |
@@ -48,6 +48,26 @@ Seed-3 round (added 2026-11-28 at the supervisor's request; arms A and B only):
 | 20 | `cnx_fastvit_kd_small_s3` | B1 | 3 | | D | | | | `cnx_fastvit_s3` | | | | |
 | 21a | `cnx_fastvit_kd_xslope_s3` | B2 | 3 | | D | | | | `cnx_fastvit_s3` | | | | |
 | 21b | ″ | B2 | 3 | | | | | | `cnx_fastvit_kd_small_s3` | | | | same run as 21a, second comparison |
+
+## Inference speed and size: teacher vs deployed student (2026-11-28)
+
+`python bench_speed.py x_slope_s1 x_slope_s2 cnx_fastvit_kd_xslope_s1 cnx_fastvit_kd_xslope_s2`, output in
+`pipeline/results/_bench_speed.txt`. RTX 5060 Laptop, torch 2.11, batch 1 (one well, 16 × 345 × 400),
+U-Net forward only, 5 alternating rounds × 100 passes, median. Absolute ms drift upward over the rounds (laptop heat),
+so the ratio within each round is the robust number.
+
+| Model | Params | File | fp32 ms | bf16 ms | Peak GPU MiB (fp32 / bf16) |
+|---|---|---|---|---|---|
+| Teacher `x_slope_s1` / `_s2` | 53.6M | 204.7 MB | 37.9 / 37.4 | 42.8 / 49.8 | 346 / 460 |
+| Student `cnx_fastvit_kd_xslope_s1` / `_s2` (deployed, reparameterised) | 12.2M | 48.2 MB | 19.7 / 18.1 | 23.8 / 21.7 | 183 / 198 |
+| Same student architecture before reparameterisation | 12.3M | — | 25.8 / 28.1 | 32.5 / 36.4 | 200 / 198 |
+
+- Student vs teacher: **4.4× fewer parameters, 4.2× smaller file, about 2× faster** (median per-round ratio 2.1× / 2.4× fp32,
+  1.8× / 2.1× bf16; single rounds range 1.4–3.2×), about half the GPU memory in fp32.
+- Reparameterisation alone accounts for about 1.4× of the student's speed.
+- bf16 autocast is *slower* than fp32 at batch 1 on this GPU for both models.
+- Not measured here: the CPU-side work per well (geo prior, input building, post-processing), which is the same for both
+  models. In September it was most of the per-well time, so the end-to-end gain is smaller than the network gain.
 
 ## Ablation summary (fill when all seeds of an ablation are done; this is the paper table)
 
